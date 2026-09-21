@@ -1,16 +1,58 @@
+"""
+OBSOLETO — construtor de grafo da geração 1 (Fase 0)
+
+    NÃO EXECUTE ESTE SCRIPT contra o grafo atual.
+
+Foi substituído por `extract_entities.py`. Permanece no repositório apenas
+como registro histórico da primeira geração do pipeline.
+
+POR QUE NÃO DEVE RODAR
+----------------------
+1. LÊ O CORPUS ERRADO. Usa `data/metadata.csv` (594 registros brutos) e o
+   texto de `local_path` (sujo). O corpus curado é `data/metadata_clean.csv`
+   (493 registros) com o texto de `clean_path`. Rodar este script recriaria no
+   grafo as 83 publicações que a SPACEBIO-012.5 descartou de propósito — as 11
+   erratas e os 70 de procedência não confiável.
+
+2. EXTRAI AS ENTIDADES ERRADAS. Usa spaCy genérico, que só reconhece
+   Organization, Person e Location. O §9.4 do briefing identifica exatamente
+   isso como o problema: não representa biologia. A ontologia real
+   (`ontology.py`) modela Organism, Gene, Tissue, ExperimentalCondition e mais.
+
+3. CREDENCIAIS HARDCODED. `AUTH = ("neo4j", "password")` viola o §8.2 e nem é
+   a senha correta — o script falharia ao conectar de qualquer forma.
+
+4. REBUILD DESTRUTIVO. Com `--rebuild`, apaga TODO o grafo: 45.947 chunks e
+   seus embeddings, ~37 minutos de CPU.
+
+O QUE USAR NO LUGAR
+-------------------
+    python ingest_corpus.py       # publicações, chunks e embeddings
+    python extract_entities.py    # entidades da ontologia V1 e menções
+    python entity_linking.py      # identificadores NCBI/UniProt
+
+Ver docs/ROADMAP-FASE-3.md para o estado atual da arquitetura.
+"""
+
 import spacy
 import pandas as pd
 import os
+import sys
 from neo4j import GraphDatabase
 
 # --- CONFIGURAÇÃO NEO4J ---
+# Mantidas como estavam na Fase 0, apenas para registro. Não use este padrão:
+# o projeto lê credenciais do ambiente desde a SPACEBIO-003 (ver config.py).
 URI = "bolt://localhost:7687"
 AUTH = ("neo4j", "password")
 
 # --- CONFIGURAÇÃO DO PROJETO ---
 DATA_DIR = "data"
 METADATA_FILE = os.path.join(DATA_DIR, "metadata.csv")
-nlp = spacy.load("en_core_web_sm")
+
+# O modelo só é carregado se o script for de fato executado — importá-lo para
+# inspeção não deve custar os segundos de carga do spaCy.
+nlp = None
 
 def build_knowledge_graph(driver):
     """
@@ -28,8 +70,15 @@ def build_knowledge_graph(driver):
         return
 
     with driver.session() as session:
-        print("Limpando banco de dados antigo...")
-        session.run("MATCH (n) DETACH DELETE n")
+        # O rebuild destrutivo deixou de ser o comportamento padrão (§20 do
+        # briefing). `MATCH (n) DETACH DELETE n` apagava TODO o grafo — hoje
+        # isso inclui os Chunks e embeddings da ingestão do corpus, que levam
+        # minutos de CPU para regenerar. Agora exige --rebuild explícito.
+        if "--rebuild" in sys.argv:
+            print("!!! --rebuild: apagando TODO o grafo (inclusive Chunks e embeddings)...")
+            session.run("MATCH (n) DETACH DELETE n")
+        else:
+            print("Modo incremental (use --rebuild para apagar o grafo antes).")
 
         for index, row in df.iterrows():
             title = row["title"]
@@ -70,6 +119,25 @@ def build_knowledge_graph(driver):
             print(f"   - Nós e relações criados para a publicação.")
 
 if __name__ == "__main__":
+    # Trava de segurança. Este script pertence à geração 1 do pipeline e
+    # corromperia o grafo curado (ver docstring no topo). A flag existe para
+    # que rodá-lo seja sempre uma escolha consciente, nunca um engano.
+    if "--i-know-this-is-obsolete" not in sys.argv:
+        print(__doc__)
+        print("=" * 74)
+        print("EXECUÇÃO BLOQUEADA.")
+        print()
+        print("Este script é da geração 1 do pipeline e corromperia o grafo atual.")
+        print("Use `python ingest_corpus.py` e `python extract_entities.py`.")
+        print()
+        print("Se precisar mesmo rodá-lo, por algum motivo histórico:")
+        print("    python build_graph.py --i-know-this-is-obsolete")
+        print("=" * 74)
+        sys.exit(1)
+
+    print("!!! Rodando o construtor OBSOLETO da geração 1.")
+    nlp = spacy.load("en_core_web_sm")
+
     try:
         with GraphDatabase.driver(URI, auth=AUTH) as driver:
             driver.verify_connectivity()

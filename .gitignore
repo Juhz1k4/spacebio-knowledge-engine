@@ -1,0 +1,42 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local project artifacts
+*.log
+*.sqlite3
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# Raw downloads are not versioned; processed corpus remains tracked intentionally.
+data/raw_pdfs/
+
+# Saída derivada do cleaner (SPACEBIO-012.5): reproduzível a partir de
+# data/processed_text/ rodando `python cleaner.py`. Não versionar.
+data/clean_text/

@@ -1,3 +1,13 @@
+"""
+Extração de links da lista de publicações (Fase 0)
+
+Utilitário que lê a página/CSV de origem e extrai as URLs dos artigos,
+alimentando o `ingest_from_github.py`.
+
+Histórico: faz parte da primeira geração do pipeline de ingestão. Mantido para
+referência de como as URLs do corpus foram obtidas.
+"""
+
 import requests
 from bs4 import BeautifulSoup
 import sys

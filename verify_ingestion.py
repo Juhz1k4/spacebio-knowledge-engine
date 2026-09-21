@@ -1,3 +1,15 @@
+"""
+Verificação da ingestão (Fase 0)
+
+Confere que cada linha de `data/metadata.csv` aponta para um arquivo de texto
+que existe e não está vazio.
+
+LIMITAÇÃO CONHECIDA: verifica apenas presença e tamanho. Não compara o título
+declarado com o conteúdo do arquivo — foi por isso que 70 documentos com o
+artigo errado passaram despercebidos até a SPACEBIO-012.5. A issue
+SPACEBIO-007.1 propõe justamente acrescentar essa checagem aqui.
+"""
+
 import pandas as pd
 import requests
 import os

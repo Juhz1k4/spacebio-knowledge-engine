@@ -1,6 +1,19 @@
-import pandas as pd
+"""
+Detecção de duplicatas no metadata (Fase 0)
 
-METADATA_FILE = "data/metadata.csv"
+Procura registros repetidos em `data/metadata.csv`.
+
+Hoje a deduplicação de produção vive no `cleaner.py`: a regra R2 remove
+registros que apontam para o mesmo arquivo (comparando o caminho em
+minúsculas, porque o Windows é case-insensitive) e a R9 mantém uma única
+cópia por DOI. Este script continua útil para inspeção rápida do metadata
+bruto, antes da limpeza.
+"""
+
+import pandas as pd
+import os
+
+METADATA_FILE = os.path.join("data", "metadata.csv")
 
 def verify_duplicates():
     """
