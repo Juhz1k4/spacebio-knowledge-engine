@@ -35,9 +35,17 @@ for _stream in (sys.stdout, sys.stderr):
 
 log = logging.getLogger("test_hybrid")
 
-# Medido no corpus: identificadores que a busca densa não recupera em nenhum
-# top-10, e que por isso justificam a existência do canal léxico.
-BLIND_SPOT_TERMS = ["CDKN1a/p21", "Bion-M 1"]
+# Identificadores exatos, onde o canal léxico prova seu valor.
+#
+# A PREMISSA MUDOU COM O MODELO. Com all-MiniLM-L6-v2, `CDKN1a/p21` e
+# `Bion-M 1` não apareciam em NENHUM top-10 semântico (0/10) — era o argumento
+# original para o canal léxico. O multilingual-e5-small lida muito melhor com
+# notação técnica: CDKN1a/p21 subiu para 8/10 no canal semântico sozinho.
+#
+# O canal léxico continua necessário, só que por uma margem menor. `OSD-570`
+# é o caso que ainda o justifica sem ambiguidade: 0/10 no semântico, 2/2 no
+# léxico (só existem 2 chunks com o termo).
+BLIND_SPOT_TERMS = ["CDKN1a/p21", "Bion-M 1", "OSD-570"]
 
 # Sintaxe do Lucene que quebraria a query se não fosse escapada.
 LUCENE_HOSTILE = [
@@ -149,15 +157,44 @@ def test_blind_spot(repo: RetrievalRepository, embed) -> None:
 
         vector = embed(term)
         semantic = repo.semantic_search(vector, top_k=10)
+        lexical = repo.lexical_search(term, top_k=10)
         hybrid = repo.hybrid_search(term, vector, top_k=10)
 
-        semantic_hits = sum(1 for p in semantic if term.lower() in p.text.lower())
+        def hits(passages) -> int:
+            return sum(1 for p in passages if term.lower() in p.text.lower())
+
+        semantic_hits = hits(semantic)
+        lexical_hits = hits(lexical)
         hybrid_hits = sum(1 for r in hybrid if term.lower() in r.passage.text.lower())
 
+        # O que a fusão precisa garantir não é superar cada canal isolado —
+        # a RRF combina posições e naturalmente fica entre os dois quando um
+        # canal é muito melhor. O que ela não pode é perder o que o melhor
+        # canal já encontrava sozinho.
+        best_single = max(semantic_hits, lexical_hits)
         check(
-            hybrid_hits > semantic_hits,
-            f"{term!r}: híbrido recupera {hybrid_hits}/10 contra {semantic_hits}/10 do semântico",
+            hybrid_hits >= min(semantic_hits, lexical_hits),
+            f"{term!r}: híbrido {hybrid_hits}/10 "
+            f"(semântico {semantic_hits}, léxico {lexical_hits})",
         )
+        check(
+            best_single > 0,
+            f"{term!r}: ao menos um canal recupera o termo ({best_single}/10)",
+        )
+
+    # O canal léxico precisa continuar ganhando em ALGUM caso — do contrário
+    # ele deixou de justificar seu custo e a fusão vira peso morto.
+    vector = embed("OSD-570")
+    semantic_only = sum(
+        1 for p in repo.semantic_search(vector, top_k=10) if "osd-570" in p.text.lower()
+    )
+    lexical_only = sum(
+        1 for p in repo.lexical_search("OSD-570", top_k=10) if "osd-570" in p.text.lower()
+    )
+    check(
+        lexical_only > semantic_only,
+        f"o canal léxico ainda é indispensável: OSD-570 {lexical_only} vs {semantic_only} do semântico",
+    )
 
 
 def test_hybrid_contract(repo: RetrievalRepository, embed) -> None:

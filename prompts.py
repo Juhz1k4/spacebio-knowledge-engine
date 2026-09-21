@@ -24,6 +24,12 @@ ele é escrito assim, porque cada escolha responde a uma falha observada:
 5. Não pede formato JSON ao modelo. O contrato (§14) é montado em código, a
    partir das passagens que já temos; pedir ao modelo que repita os metadados
    das fontes só criaria oportunidade de ele alterá-los.
+
+6. Manda recusar SEM citar. A ausência de citações é o sinal que o sistema usa
+   para marcar `grounded=False`. Medido: perguntado sobre "a capital de
+   Portugal", o modelo recusou corretamente no texto MAS citou as quatro
+   passagens para dizer que não serviam — e a resposta entrou como
+   fundamentada, com 4 fontes. A regra 3 fecha esse buraco.
 """
 
 from __future__ import annotations
@@ -44,7 +50,7 @@ REGRAS OBRIGATÓRIAS
 
 2. USE APENAS AS PASSAGENS. Não recorra a conhecimento geral seu sobre biologia espacial, nem para "completar" ou "contextualizar". Se as passagens não cobrem parte da pergunta, diga isso explicitamente.
 
-3. RECUSE QUANDO FALTAR EVIDÊNCIA. Se as passagens não permitem responder, diga que o corpus não tem evidência suficiente. Não tente uma resposta aproximada. Uma recusa honesta vale mais que uma resposta plausível sem lastro.
+3. RECUSE QUANDO FALTAR EVIDÊNCIA, E RECUSE SEM CITAR. Se as passagens não permitem responder, diga que o corpus não tem evidência suficiente — e NÃO use citações [n] nessa recusa. Citar passagens para dizer que elas não servem faz o sistema registrar a recusa como resposta fundamentada. Recusa é texto puro, sem colchetes. Não tente uma resposta aproximada: uma recusa honesta vale mais que uma resposta plausível sem lastro.
 
 4. SEPARE EVIDÊNCIA DE INTERPRETAÇÃO. Ao ir além do que está escrito, marque a diferença: "Os artigos mostram X [1]. Uma leitura possível é Y, embora as passagens não tratem disso diretamente."
 

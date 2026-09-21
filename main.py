@@ -146,14 +146,64 @@ def get_aris(request: Request):
         )
     return aris
 
-# --- CONFIGURAÇÃO CORS ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:5173", "http://127.0.0.1:8080", "http://127.0.0.1:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# --- CONFIGURAÇÃO CORS (§6.3) ---
+#
+# POR QUE NÃO `allow_origins=["*"]`
+# ---------------------------------
+# A especificação CORS proíbe o wildcard junto com credenciais: um servidor que
+# responde `Access-Control-Allow-Origin: *` com
+# `Access-Control-Allow-Credentials: true` é rejeitado pelo NAVEGADOR, não pelo
+# servidor. Com `allow_credentials=True`, o Starlette ignora o `*` e o
+# preflight continua falhando — exatamente o sintoma que se queria corrigir.
+#
+# A saída é `allow_origin_regex`: ele reflete a origem exata que fez o pedido,
+# o que é válido com credenciais e cobre qualquer máquina da rede local sem
+# precisar listar IPs um a um. Endereços de LAN mudam (DHCP), e uma lista fixa
+# quebra na próxima vez que o roteador reatribuir o IP.
+#
+# Em produção, defina CORS_ORIGINS com a lista explícita: a regex abaixo só é
+# usada quando ela está vazia.
+
+# Origens explícitas, separadas por vírgula. Tem precedência sobre a regex.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+# localhost, 127.0.0.1 e as três faixas privadas da RFC 1918, em qualquer
+# porta, com http ou https.
+LOCAL_NETWORK_ORIGIN_REGEX = (
+    r"^https?://("
+    r"localhost"
+    r"|127\.0\.0\.1"
+    r"|\[::1\]"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r")(:\d+)?$"
 )
+
+if CORS_ORIGINS:
+    # Produção: só o que foi declarado.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    print(f"CORS restrito a: {', '.join(CORS_ORIGINS)}")
+else:
+    # Desenvolvimento: qualquer origem da rede local.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=LOCAL_NETWORK_ORIGIN_REGEX,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    print("CORS liberado para a rede local (defina CORS_ORIGINS para restringir)")
 
 # --- MODELOS DE DADOS ---
 class ChatRequest(BaseModel):

@@ -60,16 +60,27 @@ class IngestionStats:
     failures: List[str] = field(default_factory=list)
 
 
-def content_fingerprint(text: str) -> str:
+def content_fingerprint(text: str, model: Optional[str] = None) -> str:
     """
-    Impressão digital do texto de uma publicação.
+    Impressão digital de uma publicação, para o build incremental.
 
     O chunking já produz IDs determinísticos, então comparar chunk a chunk
     detectaria mudanças — mas só depois de chunkar. O hash do documento
     inteiro decide antes disso, e é o que torna a reexecução barata: para uma
     publicação inalterada, o custo cai a uma leitura de arquivo.
+
+    O MODELO ENTRA NO HASH, e isso não é detalhe. Trocar o modelo de
+    embeddings não altera uma letra do texto — se o hash olhasse só para o
+    texto, a troca de modelo seria silenciosamente ignorada pelo incremental e
+    o índice ficaria com vetores de dois modelos misturados, que não são
+    comparáveis entre si. Foi exatamente o risco ao migrar de
+    all-MiniLM-L6-v2 para multilingual-e5-small.
+
+    Args:
+        model: nome do modelo de embeddings. Omitido, usa o configurado.
     """
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    material = f"{model or settings.embedding_model}\n{text}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def format_duration(seconds: float) -> str:

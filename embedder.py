@@ -63,6 +63,33 @@ log = logging.getLogger(__name__)
 EMBEDDING_MODEL = settings.embedding_model
 EMBEDDING_DIMENSION = settings.embedding_dimension
 
+# --------------------------------------------------------------------- #
+# Prefixos de instrução (modelos da família E5)
+# --------------------------------------------------------------------- #
+# Os modelos E5 são treinados com prefixos ASSIMÉTRICOS e não funcionam bem
+# sem eles: documentos são vetorizados como "passage: <texto>" e perguntas
+# como "query: <texto>". O prefixo diz ao modelo qual dos dois papéis o texto
+# cumpre na recuperação.
+#
+# Omiti-los não causa erro — causa algo pior: a busca continua funcionando,
+# com qualidade silenciosamente inferior.
+#
+# Modelos que não são E5 (all-MiniLM, paraphrase-*) não usam prefixo, e
+# acrescentá-lo degradaria o resultado. Por isso a detecção é pelo nome.
+E5_PASSAGE_PREFIX = "passage: "
+E5_QUERY_PREFIX = "query: "
+
+
+def _prefixes_for(model_name: str) -> tuple[str, str]:
+    """
+    Devolve (prefixo_de_documento, prefixo_de_pergunta) para o modelo.
+
+    Vazios para modelos que não pedem instrução.
+    """
+    if "e5" in model_name.lower():
+        return E5_PASSAGE_PREFIX, E5_QUERY_PREFIX
+    return "", ""
+
 
 class EmbeddingDimensionError(RuntimeError):
     """Modelo produziu embeddings com dimensão incompatível com o índice vetorial."""
@@ -137,6 +164,9 @@ class EmbeddingService:
         self.normalize = normalize
         self.recount_tokens = recount_tokens
 
+        # Assimétricos de propósito: ver a nota em _prefixes_for.
+        self.passage_prefix, self.query_prefix = _prefixes_for(model_name)
+
         self._model: "SentenceTransformer | None" = None
         self.last_report = EmbeddingReport()
 
@@ -188,14 +218,20 @@ class EmbeddingService:
 
     def count_tokens(self, text: str) -> int:
         """
-        Conta tokens reais do texto usando o tokenizer do modelo.
+        Conta tokens reais do texto, como ele será enviado ao modelo.
+
+        Inclui o prefixo de documento na contagem: ele ocupa tokens do
+        orçamento e conta para o truncamento.
 
         truncation=False e verbose=False são deliberados: queremos o
         comprimento REAL (para detectar truncamento) sem o aviso que o
         transformers emite ao ver sequências acima do limite do modelo.
         """
         encoded = self.model.tokenizer(
-            text, add_special_tokens=True, truncation=False, verbose=False
+            f"{self.passage_prefix}{text}",
+            add_special_tokens=True,
+            truncation=False,
+            verbose=False,
         )
         return len(encoded["input_ids"])
 
@@ -204,9 +240,15 @@ class EmbeddingService:
         texts: Sequence[str],
         batch_size: int = settings.embedding_batch_size,
         show_progress: bool = False,
+        prefix: str = "",
     ) -> List[List[float]]:
         """
         Gera embeddings para uma lista de textos, preservando a ordem.
+
+        Args:
+            prefix: instrução do modelo, se ele exigir uma. Prefira
+                `embed_chunks` e `embed_query`, que já aplicam o prefixo certo
+                para cada papel.
 
         Returns:
             Lista de vetores (listas de float, prontas para o driver Neo4j).
@@ -214,8 +256,10 @@ class EmbeddingService:
         if not texts:
             return []
 
+        prepared = [f"{prefix}{text}" for text in texts] if prefix else list(texts)
+
         vectors = self.model.encode(
-            list(texts),
+            prepared,
             batch_size=batch_size,
             convert_to_numpy=True,
             normalize_embeddings=self.normalize,
@@ -225,14 +269,18 @@ class EmbeddingService:
 
     def embed_query(self, text: str) -> List[float]:
         """
-        Gera o embedding de uma pergunta do usuário (lado da recuperação).
+        Gera o embedding de uma PERGUNTA (lado da recuperação).
 
-        Usado pela busca vetorial (SPACEBIO-012/013). Precisa usar exatamente
-        o mesmo modelo e a mesma normalização dos chunks indexados.
+        Aplica o prefixo de consulta do modelo. Usar `embed_texts` direto para
+        uma pergunta produziria um vetor no espaço errado nos modelos E5 — sem
+        erro visível, só com recuperação pior.
+
+        Precisa usar exatamente o mesmo modelo, normalização e convenção de
+        prefixo dos chunks indexados.
         """
         if not text or not text.strip():
             raise ValueError("Não é possível gerar embedding de uma query vazia.")
-        return self.embed_texts([text])[0]
+        return self.embed_texts([text], prefix=self.query_prefix)[0]
 
     def embed_chunks(
         self,
@@ -272,8 +320,12 @@ class EmbeddingService:
             return []
 
         log.info("Gerando embeddings para %d chunks (batch=%d)...", len(valid), batch_size)
+        # Prefixo de DOCUMENTO — o lado oposto ao de embed_query.
         vectors = self.embed_texts(
-            [chunk.text for chunk in valid], batch_size=batch_size, show_progress=show_progress
+            [chunk.text for chunk in valid],
+            batch_size=batch_size,
+            show_progress=show_progress,
+            prefix=self.passage_prefix,
         )
 
         embedded: List[ChunkRecord] = []
