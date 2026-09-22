@@ -1,65 +1,179 @@
+# -*- coding: utf-8 -*-
 """
-Roteador de intenção — perguntas sobre o sistema vs perguntas ao corpus
+Roteador de intenção — perguntas sobre o SISTEMA vs perguntas ao ACERVO (E3-03)
 
-Intercepta perguntas operacionais ("quem é você", "como te uso", "ajuda")
-antes do RAG e responde com um guia, sem buscar no índice vetorial nem
-acionar o LLM.
+Intercepta perguntas operacionais ("quem é você", "como funciona", "ajuda")
+antes do RAG e responde com um guia estático: zero busca vetorial, zero token
+de LLM. Tudo o mais segue para o RAG.
 
-POR QUE ISTO É NECESSÁRIO
--------------------------
+POR QUE ISTO EXISTE
+-------------------
 "Quem é você?" não tem resposta no corpus — são 493 artigos de biologia
-espacial, nenhum fala da Dra. Aris. Sem roteamento, a pergunta seguiria o
-caminho normal e receberia a recusa por falta de evidência. Tecnicamente
-correto, e péssimo: o usuário que tenta entender a ferramenta é recebido com
+espacial e nenhum fala da Dra. Aris. Sem roteamento, a pergunta seguiria o
+caminho normal e receberia a recusa por falta de evidência: tecnicamente
+correto e péssimo, porque quem tenta entender a ferramenta é recebido com
 "não encontrei evidência suficiente", o que parece defeito.
 
-O roteamento também protege a quota: perguntas operacionais são comuns nos
-primeiros minutos de uso e não deveriam consumir requisições do LLM.
+A MÉTRICA É ASSIMÉTRICA, E ISSO GOVERNA TODO O DESENHO
+------------------------------------------------------
+Os dois erros não custam o mesmo:
 
-POR QUE A CLASSIFICAÇÃO É POR REGRA, NÃO POR MODELO
----------------------------------------------------
-Usar o LLM para classificar intenção gastaria a requisição que estamos
-tentando economizar. E o conjunto de perguntas operacionais é pequeno e
-fechado — exatamente o caso em que regra explícita supera ML: é auditável,
-instantânea e não alucina.
+    operacional tratada como científica  ->  uma chamada de LLM a mais
+    científica tratada como operacional  ->  a evidência do acervo fica
+                                             escondida atrás de um guia de
+                                             ajuda que ninguém pediu
 
-O RISCO DA CLASSIFICAÇÃO ERRADA É ASSIMÉTRICO
+O segundo é inaceitável. Logo: recall de 100% para intenção científica, e
+QUALQUER dúvida roteia para o RAG. Perder uma pergunta operacional de vez em
+quando é o preço, e é barato.
+
+POR QUE CASAR A FRASE INTEIRA, E NÃO O INÍCIO
 ---------------------------------------------
-Classificar uma pergunta científica como operacional é grave: o usuário
-recebe um guia em vez da resposta que o corpus tinha. O contrário é leve:
-recebe uma recusa educada.
+Esta é a correção central da E3-03. A versão anterior exigia que o padrão
+casasse o INÍCIO da pergunta. Medido: 8 de 17 perguntas científicas eram
+capturadas indevidamente —
 
-Por isso os padrões exigem que a pergunta seja CURTA e casem a frase quase
-inteira. "Como usar camundongos em experimentos de microgravidade?" contém
-"como usar", mas tem 60 caracteres e termos do domínio — não é roteada.
+    "me ajuda com RUNX2"                   -> guia de uso
+    "como funciona a osteogênese"          -> guia de uso
+    "quais artigos falam de osteoclastos"  -> descrição do corpus
+    "o que você não sabe sobre telômeros"  -> lista de limitações
+
+Todas começam como pergunta operacional e terminam com um assunto científico
+grudado. O sinal que as distingue não é vocabulário — é FORMA: uma pergunta
+operacional é uma frase fechada e autocontida. No instante em que sobra um
+assunto depois dela, a pergunta é sobre o assunto.
+
+Casar a frase inteira resolve os quatro casos acima sem precisar conhecer as
+palavras "RUNX2", "osteogênese", "osteoclastos" ou "telômeros". É um guard
+estrutural, e por isso não envelhece junto com o corpus.
+
+POR QUE MESMO ASSIM EXISTE UM VOCABULÁRIO
+-----------------------------------------
+Cinto e suspensório. O guard de forma pega o caso geral; o vocabulário pega a
+pergunta curta que POR ACASO tem forma operacional. Ele vem de
+`data/domain_vocabulary.json`, gerado do próprio grafo por
+`build_domain_vocabulary.py` — entidades extraídas do corpus mais termos em
+português, que o grafo não tem porque os artigos são todos em inglês.
+
+Lista escrita à mão foi exatamente o que falhou antes: cada termo faltante era
+uma pergunta científica virando guia de ajuda.
+
+POR QUE REGRA E NÃO MODELO
+--------------------------
+Usar o LLM para classificar gastaria a requisição que se está tentando
+economizar. E o conjunto de perguntas operacionais é pequeno e fechado —
+exatamente o caso em que regra explícita supera ML: é auditável, roda em
+microssegundos e não alucina.
 """
 
 from __future__ import annotations
 
+import json
 import re
+import unicodedata
 from dataclasses import dataclass
-from typing import List, Optional
+from functools import lru_cache
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
 
-# Perguntas operacionais raramente passam disto. O limite é a primeira
-# barreira contra falso positivo: uma pergunta científica longa que por acaso
-# contenha "como usar" não é capturada.
+# Perguntas operacionais são curtas. O limite é a primeira barreira: uma
+# pergunta científica longa que por acaso tenha forma operacional não passa.
 MAX_META_QUESTION_CHARS = 80
 
-# Termos do domínio que vetam o roteamento. Se a pergunta menciona qualquer
-# um, ela é científica mesmo que a forma pareça operacional.
-DOMAIN_TERMS = {
-    "microgravidade", "microgravity", "espacial", "space", "espaço",
-    "radiação", "radiation", "gene", "genes", "genética", "osso", "ossos",
-    "bone", "músculo", "muscle", "célula", "cell", "nasa", "iss", "astronauta",
-    "astronaut", "camundongo", "camundongos", "rato", "ratos", "mice", "mouse",
-    "planta", "plantas", "plant", "voo", "flight", "experimento", "experiment",
-    "proteína", "protein", "dna", "rna", "corpo humano",
-}
+VOCABULARY_PATH = Path(__file__).parent / "data" / "domain_vocabulary.json"
+
+# Identificadores científicos: RUNX2, CDKN1A, p21, OSD-570, GLDS-104, IL6.
+# Uma pergunta operacional não contém letra seguida de dígito.
+IDENTIFIER_PATTERN = re.compile(r"\b[a-z]{1,10}[-_]?\d+[a-z0-9]*\b")
+
+# Siglas do domínio em caixa alta, lidas no texto ORIGINAL: ISS, GCR, NASA, DNA.
+ACRONYM_PATTERN = re.compile(r"\b[A-Z]{2,}\b")
+
+# Saudação na frente e cortesia no fim não mudam a intenção da pergunta.
+_GREETING = r"(?:(?:oi|ola|ei|hey|hi|hello|bom dia|boa tarde|boa noite|dra aris|aris)[\s,]+)?"
+_COURTESY = r"(?:[\s,]*(?:por favor|pfv|pf|please|obrigado|obrigada))?"
+
+
+def strip_accents(text: str) -> str:
+    """'osteogênese' e 'osteogenese' precisam casar; acento não é intenção."""
+    decomposed = unicodedata.normalize("NFD", text)
+    return "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+
+
+def normalize(text: str) -> str:
+    """
+    Reduz a pergunta à forma em que os padrões estão escritos.
+
+    Minúsculas, sem acento, sem pontuação, espaços colapsados. A pontuação
+    interna vira espaço para que "dra. aris" e "dra aris" coincidam.
+    """
+    text = strip_accents(text.lower())
+    text = re.sub(r"[^\w\s]", " ", text)
+    return " ".join(text.split())
+
+
+@lru_cache(maxsize=1)
+def _vocabulary() -> Tuple[Set[str], Tuple[str, ...]]:
+    """
+    Carrega o vocabulário de domínio, separando termos de uma palavra dos de
+    várias — os primeiros são testados por interseção de conjuntos, os
+    segundos por substring, que é mais caro.
+
+    Ausência do arquivo NÃO é erro fatal: o guard de forma continua valendo e
+    o sistema segue funcionando, só com uma rede a menos. Derrubar a API por
+    causa de um cache regenerável seria trocar um problema pequeno por um
+    grande.
+    """
+    try:
+        payload = json.loads(VOCABULARY_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set(), ()
+
+    single: Set[str] = set()
+    multi: List[str] = []
+    for term in payload.get("entity_terms", []) + payload.get("portuguese_terms", []):
+        normalized = normalize(term)
+        if not normalized:
+            continue
+        if " " in normalized:
+            multi.append(normalized)
+        else:
+            single.add(normalized)
+    return single, tuple(multi)
+
+
+def mentions_domain(question: str) -> bool:
+    """
+    A pergunta carrega vocabulário ou estrutura do domínio científico?
+
+    Generoso de propósito: um falso positivo aqui manda a pergunta para o RAG,
+    que é o lado barato do erro.
+    """
+    normalized = normalize(question)
+    if not normalized:
+        return False
+
+    # Identificador com dígito: RUNX2, p21, OSD-570.
+    if IDENTIFIER_PATTERN.search(normalized):
+        return True
+
+    # Sigla em caixa alta. Ignorada quando a pergunta INTEIRA está em caixa
+    # alta, senão "QUEM É VOCÊ" seria lida como termo técnico.
+    letters = [c for c in question if c.isalpha()]
+    if letters and not all(c.isupper() for c in letters):
+        if ACRONYM_PATTERN.search(strip_accents(question)):
+            return True
+
+    single, multi = _vocabulary()
+    tokens = set(normalized.split())
+    if tokens & single:
+        return True
+    return any(term in normalized for term in multi)
 
 
 @dataclass(frozen=True)
 class MetaIntent:
-    """Uma intenção operacional reconhecida e a resposta que ela recebe."""
+    """Uma intenção operacional reconhecida e a resposta estática que recebe."""
 
     name: str
     patterns: List[re.Pattern]
@@ -85,6 +199,8 @@ ou inglês, tanto faz. Alguns exemplos que funcionam bem:
 • *O que acontece com o sistema imune em voo espacial?*
 • *Quais experimentos foram feitos com Arabidopsis na ISS?*
 
+Termos soltos também funcionam: *RUNX2*, *atrofia muscular*, *OSD-570*.
+
 **Como ler a resposta.** Os números `[1]`, `[2]` no texto são citações: clique \
 neles para ir ao trecho exato que sustenta aquela afirmação. Cada cartão de \
 evidência mostra a passagem literal do artigo, a revista, o DOI e por qual \
@@ -97,10 +213,14 @@ fundamento aqui."""
 CORPUS_ANSWER = """Meu corpus tem **493 publicações científicas** de biologia \
 espacial, todas do PubMed Central, divididas em 45.947 trechos indexados.
 
-São artigos revisados por pares sobre efeitos do voo espacial e da \
-microgravidade em organismos: perda óssea, atrofia muscular, expressão gênica, \
-resposta imune, danos por radiação, crescimento de plantas no espaço, \
-microbiologia em ambiente espacial.
+**Temas que eu cubro:** perda óssea e osteoporose em microgravidade, atrofia \
+muscular, expressão gênica e transcriptômica, resposta imune, danos por \
+radiação cósmica, crescimento de plantas no espaço, microbiologia de ambientes \
+fechados e fisiologia cardiovascular em voo.
+
+São artigos revisados por pares sobre os efeitos do voo espacial e da \
+microgravidade em organismos — de *Arabidopsis* e *Bacillus subtilis* a \
+camundongos e astronautas.
 
 O acervo passou por curadoria: 83 documentos foram **descartados** por não \
 serem confiáveis — erratas sem conteúdo científico e artigos cujo título \
@@ -123,75 +243,114 @@ diferentes dos artigos, a busca pode falhar. Vale reformular.
 **Não faço juízo sobre a qualidade dos estudos.** Se dois artigos discordam, \
 mostro os dois."""
 
+
+def _full(*alternatives: str) -> List[re.Pattern]:
+    """
+    Compila cada alternativa como padrão de frase INTEIRA.
+
+    `fullmatch` é o que implementa a regra central: o padrão precisa dar conta
+    de tudo o que foi digitado. Sobrou assunto? Não é pergunta operacional.
+    Saudação e cortesia são toleradas nas bordas porque não mudam a intenção.
+    """
+    return [
+        re.compile(_GREETING + "(?:" + alternative + ")" + _COURTESY)
+        for alternative in alternatives
+    ]
+
+
 META_INTENTS: List[MetaIntent] = [
     MetaIntent(
         name="identity",
-        patterns=[
-            re.compile(r"^\s*(quem|que)\s+(é|e|es)\s+(você|voce|vc|tu)\b", re.I),
-            re.compile(r"^\s*(o\s+)?que\s+(você|voce|vc)\s+(é|e)\b", re.I),
-            re.compile(r"^\s*who\s+are\s+you\b", re.I),
-            re.compile(r"^\s*(qual|quem)\s+(é|e)\s+(o\s+)?seu\s+nome\b", re.I),
-            re.compile(r"^\s*(se\s+)?apresent[ea]", re.I),
-        ],
+        patterns=_full(
+            r"(?:quem|que|qual) (?:e|eh|es|sao) (?:voce|vc|tu|voces)",
+            r"quem (?:e|eh) (?:a |o )?(?:dra?\s*)?aris",
+            r"o que (?:voce|vc) (?:e|eh)",
+            r"(?:who|what) (?:are|is) you",
+            r"qual (?:e )?(?:o )?seu nome",
+            r"como (?:voce|vc) se chama",
+            r"(?:se )?apresent(?:e|e se|a se|acao)",
+            r"fale (?:sobre |de )?(?:voce|vc|si)",
+        ),
         answer=IDENTITY_ANSWER,
     ),
     MetaIntent(
         name="usage",
-        patterns=[
-            re.compile(r"^\s*como\s+(te\s+)?(us[ao]|utiliz[ao]|funciona)", re.I),
-            re.compile(r"^\s*como\s+(eu\s+)?(devo|posso)\s+(te\s+)?(us|pergunt|falar)", re.I),
-            re.compile(r"^\s*(me\s+)?ajud[ae]\b", re.I),
-            re.compile(r"^\s*(help|ajuda)\s*[?!.]*\s*$", re.I),
-            re.compile(r"^\s*how\s+(do\s+i\s+)?use\s+(you|this)", re.I),
-            re.compile(r"^\s*o\s+que\s+(você|voce|vc)\s+(faz|pode\s+fazer)", re.I),
-            re.compile(r"^\s*what\s+can\s+you\s+do", re.I),
-            re.compile(r"^\s*(quais?|que)\s+(tipos?\s+de\s+)?pergunt", re.I),
-        ],
+        patterns=_full(
+            r"(?:me )?ajud(?:a|e|ar)(?: ai| aqui)?",
+            r"(?:preciso de )?ajuda",
+            r"help",
+            r"socorro",
+            r"como (?:voce|vc|isso|isto|tudo|o sistema|essa ferramenta) funciona",
+            r"como funciona(?: isso| isto| o sistema| voce| vc| essa ferramenta| tudo)?",
+            r"como (?:eu )?(?:te |voce |vc )?us(?:o|ar)(?: isso| isto| o sistema| voce| vc)?",
+            r"como (?:eu )?(?:posso|devo) (?:te |voce |vc )?(?:usar|perguntar|falar|pesquisar)",
+            r"como (?:eu )?(?:posso|devo) (?:fazer|comecar)",
+            r"como (?:perguntar|pesquisar|buscar|procurar)",
+            r"o que (?:voce|vc) (?:faz|pode fazer|consegue fazer|sabe fazer)",
+            r"o que (?:da|de) para (?:fazer|perguntar)(?: aqui)?",
+            r"what can you do",
+            r"how (?:do i )?(?:use|work with) (?:you|this|it)",
+            r"(?:quais|que|quantas) (?:tipos? de )?pergunt(?:a|as)"
+            r"(?: (?:eu )?(?:posso|devo) fazer)?",
+            r"que (?:tipo|tipos) de (?:coisa|coisas|duvida|duvidas)",
+            r"por onde (?:eu )?come(?:co|car)",
+            r"(?:me )?(?:da|de) (?:um )?exemplos?",
+            r"(?:quais|que) (?:sao )?(?:os )?exemplos",
+        ),
         answer=USAGE_ANSWER,
     ),
     MetaIntent(
         name="corpus",
-        patterns=[
-            re.compile(r"^\s*(quais|que|quantos)\s+(artigos|publicaç|estudos|dados)", re.I),
-            re.compile(r"^\s*(qual|que)\s+(é\s+)?(a\s+)?sua\s+(base|fonte)", re.I),
-            re.compile(r"^\s*(de\s+)?onde\s+(vem|vêm|vêem)\s+(as\s+)?(suas\s+)?(informa|resposta|dados)", re.I),
-            re.compile(r"^\s*what\s+(data|papers|articles)\s+do\s+you", re.I),
-            re.compile(r"^\s*(o\s+que\s+)?(há|tem|existe)\s+(no\s+)?seu\s+(corpus|acervo)", re.I),
-        ],
+        patterns=_full(
+            r"(?:quais|que|quantos|quantas) "
+            r"(?:artigos|publicacoes|estudos|papers|dados|fontes)"
+            r"(?: (?:voce|vc) (?:tem|usa|consulta|indexa|leu))?",
+            r"qual (?:e )?(?:a )?sua (?:base|fonte|origem)(?: de dados)?",
+            r"quais (?:sao )?(?:as )?suas (?:fontes|bases|referencias)",
+            r"(?:de )?onde vem (?:as |os )?(?:suas |seus )?"
+            r"(?:informacoes|respostas|dados|fontes)",
+            r"(?:o que )?(?:tem|ha|existe) no seu (?:corpus|acervo|banco|indice)",
+            r"qual (?:e )?(?:o )?seu (?:corpus|acervo|banco|escopo)",
+            r"(?:quais|que) (?:temas|assuntos|topicos|areas|materias) (?:voce|vc) "
+            r"(?:cobre|aborda|responde|trata|conhece)",
+            r"(?:quais|que) (?:sao )?(?:os )?(?:seus )?(?:temas|assuntos|topicos)",
+            r"sobre o que (?:voce|vc) (?:responde|fala|sabe|escreve)",
+            r"what (?:data|papers|articles|sources) do you (?:have|use)",
+            r"(?:qual|que) (?:e )?(?:o )?(?:tamanho|escopo) do (?:corpus|acervo)",
+        ),
         answer=CORPUS_ANSWER,
     ),
     MetaIntent(
         name="limitations",
-        patterns=[
-            re.compile(r"^\s*(quais|que)\s+(são\s+)?(suas\s+)?limitaç", re.I),
-            # "não" e "nao": quem digita rápido não acentua, e a pergunta é a
-            # mesma. Vale para todos os padrões — acentuação não é sinal de
-            # intenção diferente.
-            re.compile(r"^\s*(o\s+que\s+)?(você|voce|vc)\s+n[ãa]o\s+(sabe|pode|consegue)", re.I),
-            re.compile(r"^\s*what\s+(are\s+your\s+)?limitations", re.I),
-            re.compile(r"^\s*(você|voce|vc)\s+(pode|consegue)\s+errar", re.I),
-        ],
+        patterns=_full(
+            r"(?:quais|que) (?:sao )?(?:as )?(?:suas )?limitacoes",
+            r"(?:quais|que) (?:sao )?(?:os )?(?:seus )?limites",
+            r"suas limitacoes",
+            r"o que (?:voce|vc) nao (?:sabe|pode|consegue)(?: fazer| responder)?",
+            r"(?:voce|vc) (?:pode|consegue) errar",
+            r"(?:voce|vc) (?:erra|alucina|inventa)",
+            r"what (?:are your )?limitations",
+            r"(?:quais|que) (?:sao )?(?:os )?(?:seus )?(?:defeitos|problemas)",
+        ),
         answer=LIMITATIONS_ANSWER,
     ),
 ]
 
 
-def mentions_domain(question: str) -> bool:
-    """A pergunta usa vocabulário do domínio científico?"""
-    lowered = question.lower()
-    return any(
-        re.search(rf"\b{re.escape(term)}\b", lowered) for term in DOMAIN_TERMS
-    )
-
-
 def classify(question: str) -> Optional[MetaIntent]:
     """
-    Identifica uma pergunta operacional, ou devolve None.
+    Identifica uma pergunta operacional, ou devolve None para seguir ao RAG.
 
-    Três guardas contra capturar pergunta científica por engano:
-      1. a pergunta precisa ser curta;
-      2. não pode mencionar termo do domínio;
-      3. o padrão precisa casar o INÍCIO da frase, não um trecho qualquer.
+    Três guards, todos com o mesmo viés: na dúvida, None.
+
+      1. COMPRIMENTO  — acima de MAX_META_QUESTION_CHARS não é operacional.
+      2. DOMÍNIO      — vocabulário do grafo, termos em português, ou um
+                        identificador/sigla no texto. Qualquer um veta.
+      3. FORMA        — o padrão precisa casar a frase INTEIRA. Sobrou
+                        assunto, a pergunta é sobre o assunto.
+
+    Devolver None é sempre seguro: custa uma chamada de LLM. Devolver uma
+    intenção por engano esconde o acervo, e é o erro que não se aceita.
     """
     if not question or not question.strip():
         return None
@@ -202,7 +361,11 @@ def classify(question: str) -> Optional[MetaIntent]:
     if mentions_domain(text):
         return None
 
+    normalized = normalize(text)
+    if not normalized:
+        return None
+
     for intent in META_INTENTS:
-        if any(pattern.search(text) for pattern in intent.patterns):
+        if any(pattern.fullmatch(normalized) for pattern in intent.patterns):
             return intent
     return None
