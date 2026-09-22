@@ -25,7 +25,9 @@ from typing import List, Optional
 
 log = logging.getLogger(__name__)
 
-DEFAULT_GEMINI_MODEL = os.getenv("LLM_MODEL", "gemini-flash-latest")
+# A variante "lite" por causa da quota: o free tier permite 20 requisicoes por
+# dia POR MODELO, e a lite costuma ter limite maior.
+DEFAULT_GEMINI_MODEL = os.getenv("LLM_MODEL", "gemini-flash-lite-latest")
 
 # 4096, não 1024. Os modelos Gemini atuais gastam o orçamento de saída com
 # raciocínio interno antes de escrever: medido neste projeto, 968-984 tokens de

@@ -53,7 +53,10 @@ log = logging.getLogger(__name__)
 # 0,72 fica confortavelmente no vão. Note que o piso NÃO é zero: com vetores
 # normalizados, qualquer pergunta pontua ~0,6 — sem limiar, o modelo receberia
 # "evidência" para qualquer coisa.
-EVIDENCE_THRESHOLD = float(os.getenv("EVIDENCE_THRESHOLD", "0.72"))
+# 0.92, nao 0.72: o multilingual-e5-small comprime a faixa de scores e o valor
+# do MiniLM nao se transporta entre as escalas. Ver .env.example para a
+# calibracao e por que este limiar sozinho nao separa dominio de nao-dominio.
+EVIDENCE_THRESHOLD = float(os.getenv("EVIDENCE_THRESHOLD", "0.92"))
 
 # Quantas passagens vão ao prompt. Acima de ~8 o modelo começa a diluir a
 # atenção e a citar menos; abaixo de 3 ele fica sem material para relacionar.

@@ -55,7 +55,10 @@ class Settings:
 
     # --- Embeddings (SPACEBIO-010) ---
     embedding_model: str = field(
-        default_factory=lambda: _env("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        # O default precisa ser o modelo que gerou os vetores no grafo. Se
+        # divergir, os embeddings ficam incompativeis com o indice e a busca
+        # degrada em silencio -- nada levanta excecao, so os resultados pioram.
+        default_factory=lambda: _env("EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
     )
     embedding_dimension: int = field(
         default_factory=lambda: int(_env("EMBEDDING_DIMENSION", "384"))
