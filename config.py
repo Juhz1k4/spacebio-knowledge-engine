@@ -44,7 +44,11 @@ class Settings:
     """Configuração imutável do pipeline, resolvida a partir do ambiente."""
 
     # --- Neo4j ---
-    neo4j_uri: str = field(default_factory=lambda: _env("NEO4J_URI", "bolt://localhost:7687"))
+    # 127.0.0.1, nao `localhost`: no Windows o resolver entrega ::1 (IPv6)
+    # primeiro e o Neo4j escuta so em IPv4, entao cada conexao nova do pool
+    # paga ~2 s de timeout antes de cair para IPv4. Medido: 2051 ms contra
+    # 16 ms. Ver docs/RETRIEVAL_AUDIT.md.
+    neo4j_uri: str = field(default_factory=lambda: _env("NEO4J_URI", "bolt://127.0.0.1:7687"))
     neo4j_user: str = field(default_factory=lambda: _env("NEO4J_USER", "neo4j"))
     neo4j_password: str | None = field(default_factory=lambda: os.getenv("NEO4J_PASSWORD"))
     neo4j_database: str = field(default_factory=lambda: _env("NEO4J_DATABASE", "neo4j"))
