@@ -3,7 +3,12 @@ SpaceBio — API HTTP (ponto de entrada da aplicação)
 
 Servidor FastAPI que expõe o motor de conhecimento. Suba com:
 
-    uvicorn main:app --reload
+    uvicorn main:app --reload --no-server-header
+
+`--no-server-header` NÃO é opcional em ambiente exposto (E3-08): sem ele, o
+uvicorn anuncia a própria versão no cabeçalho `Server`, e isso é meio caminho
+para escolher um exploit conhecido. A supressão só pode ser feita pelo
+servidor -- o middleware de segurança não alcança a camada de protocolo.
 
 ENDPOINTS
 ---------
@@ -41,7 +46,7 @@ ORDEM DE LEITURA PARA QUEM ESTÁ CHEGANDO
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import logging
 import os
@@ -50,6 +55,16 @@ from config import MissingCredentialError, settings
 from evidence import EvidenceAnswer
 from graph_manager import build_driver
 from retrieval import RetrievalRepository
+from security import (
+    MAX_QUESTION_CHARS,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    sanitize_question,
+)
+
+# Teto de trechos por requisição. 6 é o padrão em uso; 20 dá folga para
+# experimentação sem permitir que uma requisição sozinha varra o grafo.
+MAX_TOP_K = 20
 
 log = logging.getLogger(__name__)
 
@@ -158,6 +173,26 @@ def get_aris(request: Request):
         )
     return aris
 
+# --- MIDDLEWARES DE SEGURANÇA (E3-08) ---
+#
+# A ORDEM IMPORTA, e ao contrário do que parece: no Starlette, o middleware
+# adicionado por ÚLTIMO fica mais EXTERNO. Daqui de cima para baixo, o pedido
+# entra na ordem inversa da escrita.
+#
+# O CORS é adicionado depois destes dois (logo abaixo), de propósito: ele
+# precisa ser o mais externo para responder ao preflight e para anexar os
+# cabeçalhos de origem também às respostas de erro -- inclusive ao 429 do
+# limitador. Sem isso, o navegador mostraria "erro de CORS" quando o problema
+# real era limite de taxa, e mandaria o desenvolvedor depurar a coisa errada.
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Desligável para teste e desenvolvimento local, onde recarregar a página
+# muitas vezes seguidas não é ataque.
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() not in ("0", "false", "no")
+app.add_middleware(RateLimitMiddleware, enabled=RATE_LIMIT_ENABLED)
+if not RATE_LIMIT_ENABLED:
+    print("AVISO: limitação de taxa DESLIGADA (RATE_LIMIT_ENABLED=false)")
+
 # --- CONFIGURAÇÃO CORS (§6.3) ---
 #
 # POR QUE NÃO `allow_origins=["*"]`
@@ -219,8 +254,26 @@ else:
 
 # --- MODELOS DE DADOS ---
 class ChatRequest(BaseModel):
-    question: str
-    top_k: Optional[int] = None
+    """
+    Corpo de POST /api/v1/chat, com os limites validados pelo Pydantic (E3-08).
+
+    Os limites não são cosméticos. Antes deles, `top_k` chegava sem teto: uma
+    requisição com `top_k=100000` faria a busca híbrida materializar cem mil
+    trechos do grafo e montar um prompt gigantesco -- negação de serviço com
+    uma linha de JSON, sem precisar de volume de requisições.
+
+    `max_length` na pergunta é a primeira barreira contra injeção de prompt:
+    texto longo é o veículo natural para enterrar instruções no meio de ruído.
+    A sanitização em `security.sanitize_question` faz o resto.
+    """
+
+    question: str = Field(..., min_length=1, max_length=MAX_QUESTION_CHARS)
+    top_k: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=MAX_TOP_K,
+        description="Quantos trechos recuperar. Limitado para conter o custo por requisição.",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -256,11 +309,16 @@ def chat_with_evidence(request: ChatRequest, aris=Depends(get_aris)) -> Evidence
     200 com `grounded=false` e `sources` vazio. Ausência de evidência é um
     resultado científico legítimo (§15.7), não uma exceção.
     """
-    if not request.question or not request.question.strip():
-        raise HTTPException(status_code=422, detail="A pergunta não pode ser vazia.")
+    # Sanitiza ANTES de chegar perto do prompt: remove caracteres de controle,
+    # colapsa espaço em branco e corta no limite. Ver security.sanitize_question
+    # sobre por que NÃO há filtro de palavra-chave contra injeção.
+    try:
+        question = sanitize_question(request.question)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     try:
-        return aris.answer(request.question, top_k=request.top_k)
+        return aris.answer(question, top_k=request.top_k)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as error:  # noqa: BLE001
@@ -282,10 +340,12 @@ def chat_with_dr_aris(request: ChatRequest, aris=Depends(get_aris)) -> ChatRespo
 
     Prefira /api/v1/chat: sem as fontes, o cliente não tem como verificar nada.
     """
-    if not request.question or not request.question.strip():
-        raise HTTPException(status_code=422, detail="A pergunta não pode ser vazia.")
+    try:
+        question = sanitize_question(request.question)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
-    result: EvidenceAnswer = aris.answer(request.question, top_k=request.top_k)
+    result: EvidenceAnswer = aris.answer(question, top_k=request.top_k)
 
     # Anexa as fontes ao texto, já que este formato não tem campo para elas.
     if result.cited_sources:
@@ -299,3 +359,17 @@ def chat_with_dr_aris(request: ChatRequest, aris=Depends(get_aris)) -> ChatRespo
 
     return ChatResponse(answer=result.answer)
 
+
+if __name__ == "__main__":
+    # `python main.py` sobe com as opções corretas de segurança já aplicadas,
+    # para que o modo mais simples de rodar não seja o menos seguro (E3-08).
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", "8000")),
+        # Não anunciar servidor nem data: divulgação de versão sem benefício.
+        server_header=False,
+        date_header=True,
+    )

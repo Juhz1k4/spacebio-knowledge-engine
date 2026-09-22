@@ -46,3 +46,48 @@ data/clean_text/
 # projeto de fato usa -- autores, ano, volume -- vive no grafo, gravado pelo
 # job. Versionar cache de API so incha o repositorio.
 data/crossref_metadata.json
+
+# ---------------------------------------------------------------------------
+# E3-08 -- segredos que o .gitignore anterior nao cobria
+# ---------------------------------------------------------------------------
+# Auditado com `git check-ignore` sobre caminhos reais, e nao por leitura do
+# arquivo: um padrao pode parecer certo e nao casar. Os oito abaixo passavam.
+#
+# Cada linha existe porque a ferramenta correspondente grava o arquivo NO
+# DIRETORIO DO PROJETO por padrao -- e e assim que segredo vaza: nao por
+# descuido, mas porque o arquivo aparece onde ninguem esperava.
+
+# Chaves SSH (ssh-keygen sugere o diretorio atual se o -f for relativo)
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+.ssh/
+
+# Certificados e chaves TLS (*.pem ja coberto acima)
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Credenciais de servico em JSON/YAML
+credentials.json
+credentials.yml
+credentials.yaml
+service-account*.json
+gcp-*.json
+*-service-account.json
+secrets.yml
+secrets.yaml
+
+# Tokens de registro de pacote (npm login grava o token aqui)
+.npmrc
+.yarnrc
+.pypirc
+
+# Dumps e backups, que costumam carregar dados reais
+*.sql
+*.dump
+*.bak

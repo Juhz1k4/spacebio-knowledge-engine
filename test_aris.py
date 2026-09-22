@@ -148,13 +148,26 @@ def test_prompt_construction() -> None:
     check("página" in SYSTEM_PROMPT.lower(), "prompt proíbe fabricar página (§15.5)")
 
     formatted = format_passages(sources)
-    check("[1]" in formatted, "passagem vem numerada")
+    # E3-08: a numeração passou de "[1] artigo de origem:" para
+    # <passagem n="1">. A marcação é mais forte que o prefixo -- diz ao modelo
+    # onde uma passagem TERMINA, e não só onde começa. Sem fronteira de
+    # fechamento, texto de um artigo pode ser lido como continuação do
+    # anterior, e a citação [n] passa a apontar para a fonte errada.
+    check('<passagem n="1">' in formatted, "passagem vem numerada e delimitada")
+    check("</passagem>" in formatted, "a passagem tem fronteira de fechamento")
     check("Artigo X" in formatted, "título identifica a origem")
     check("evidência:" in formatted, "o texto é rotulado como a evidência")
 
     user = build_user_prompt(IN_DOMAIN, sources)
     check(IN_DOMAIN in user, "a pergunta entra no prompt")
-    check("[1]" in user, "as passagens entram no prompt")
+    check('<passagem n="1">' in user, "as passagens entram no prompt")
+    # E3-08: as duas fronteiras precisam existir, senão a delimitação não
+    # separa nada -- pergunta e contexto voltariam a ser o mesmo fluxo de
+    # texto em que estão as regras do sistema.
+    check("<pergunta_do_usuario>" in user and "</pergunta_do_usuario>" in user,
+          "a pergunta é delimitada")
+    check("<contexto_recuperado>" in user and "</contexto_recuperado>" in user,
+          "o contexto recuperado é delimitado")
 
 
 # ---------------------------------------------------------------------- #
@@ -178,7 +191,10 @@ def test_grounded_answer(repo, embeddings) -> EvidenceAnswer:
     check(len(provider.calls) == 1, "o provedor foi chamado uma vez")
     prompt = provider.calls[0]["user"]
     check(IN_DOMAIN in prompt, "a pergunta chegou ao modelo")
-    check("[1]" in prompt and "[4]" in prompt, "as 4 passagens foram numeradas no prompt")
+    check('<passagem n="1">' in prompt and '<passagem n="4">' in prompt,
+          "as 4 passagens foram numeradas no prompt")
+    check(prompt.count("</passagem>") == 4,
+          "cada passagem tem a sua fronteira de fechamento")
 
     cited = result.cited_sources
     check(len(cited) == 2, f"{len(cited)} fontes marcadas como citadas")
