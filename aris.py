@@ -49,10 +49,17 @@ from evidence import (
     build_sources,
     insufficient_evidence_answer,
     validate_quotes,
+    SYNTHESIS_UNAVAILABLE,
     verify_citations,
 )
 from intent import MetaIntent, classify as classify_intent
-from llm_provider import LLMError, LLMProvider, LLMUnavailable, default_provider
+from llm_provider import (
+    LLMError,
+    LLMProvider,
+    LLMTimeout,
+    LLMUnavailable,
+    default_provider,
+)
 from prompts import SYSTEM_PROMPT, build_user_prompt
 from retrieval import RetrievalRepository
 
@@ -235,6 +242,12 @@ class DraAris:
                 SYSTEM_PROMPT, build_user_prompt(question, sources)
             )
             answer_text = response.text
+        # E3-04 -- os tres ramos terminam na MESMA degradacao para o usuario:
+        # a evidencia recuperada. O que muda e o log, porque "demorou",
+        # "provedor fora" e "quebrou" pedem reacoes diferentes de quem opera.
+        except LLMTimeout as error:
+            log.warning("Geração abortada por tempo: %s", error)
+            return self._evidence_only_answer(question, sources, top_score, channels, str(error))
         except LLMUnavailable as error:
             log.error("Provedor indisponível: %s", error)
             return self._evidence_only_answer(question, sources, top_score, channels, str(error))
@@ -368,28 +381,38 @@ class DraAris:
         error: str,
     ) -> EvidenceAnswer:
         """
-        Degradação quando o LLM falha, mas a evidência existe.
+        Degradação graciosa quando o LLM falha, mas a evidência existe (E3-04).
 
-        Em vez de devolver erro, entrega as passagens encontradas. O usuário
-        perde a síntese e mantém o essencial — os trechos e suas fontes.
+        NUNCA levanta e nunca vira 500. O usuário perde a síntese e mantém o
+        que de fato sustenta uma resposta: os trechos e sua procedência. Numa
+        demonstração, essa é a diferença entre um sistema que quebra e um que
+        degrada — e a segunda leitura é a correta, porque o trabalho de
+        recuperação foi feito e está todo no payload.
+
+        Todas as fontes chegam marcadas como citadas. Sem síntese não há
+        marcadores [n] para conferir, e deixá-las como "não citadas" faria a
+        interface esconder num `<details>` justamente o que sobrou de útil.
         """
+        for source in sources:
+            source.cited = True
+
         return EvidenceAnswer(
-            answer=(
-                "Não consegui redigir a síntese agora, mas encontrei no corpus as "
-                f"passagens abaixo, que são a evidência disponível para a sua pergunta. "
-                f"({len(sources)} trechos recuperados.)"
-            ),
+            answer=SYNTHESIS_UNAVAILABLE,
+            status="synthesis_unavailable",
             sources=sources,
             retrieval=RetrievalTrace(
                 query=question,
                 chunks_considered=len(sources),
-                chunks_used=0,
+                chunks_used=len(sources),
                 top_score=round(top_score, 4),
                 evidence_threshold=self.threshold,
                 channels=channels,
             ),
+            # grounded=False porque nao ha texto sintetizado cujo lastro se
+            # possa verificar. As passagens estao la e sao reais; o que falta
+            # e a afirmacao que elas sustentariam.
             grounded=False,
-            warnings=[f"Geração indisponível: {error}"],
+            warnings=[f"Causa técnica: {error}"],
         )
 
 if __name__ == "__main__":

@@ -253,9 +253,24 @@ def test_provider_failure(repo, embeddings) -> None:
     check(isinstance(result, EvidenceAnswer), "ainda devolve o contrato")
     check(result.grounded is False, "sem síntese, não é fundamentada")
     check(len(result.sources) == 3, "as passagens recuperadas são preservadas")
+    # E3-04: o estado tem campo próprio. Antes isto checava um prefixo de
+    # mensagem que o código controla — frágil, e quebrou quando o texto mudou.
+    # O que importa verificar é o contrato: o estado e a causa do provedor.
     check(
-        any("indisponível" in warning for warning in result.warnings),
-        "a falha do provedor é reportada",
+        result.status == "synthesis_unavailable",
+        "estado marcado como synthesis_unavailable",
+    )
+    check(
+        all(source.cited for source in result.sources),
+        "sem síntese, as fontes não ficam escondidas como não citadas",
+    )
+    check(
+        result.retrieval.chunks_used == 3,
+        "o rastro reflete as passagens entregues",
+    )
+    check(
+        any("falha simulada do provedor" in warning for warning in result.warnings),
+        "a causa vinda do provedor é reportada",
     )
 
 

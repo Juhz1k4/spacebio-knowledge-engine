@@ -37,6 +37,19 @@ DEFAULT_GEMINI_MODEL = os.getenv("LLM_MODEL", "gemini-flash-lite-latest")
 # apenas "não fundamentada", sem revelar a causa.
 DEFAULT_MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "4096"))
 
+# E3-04 -- teto de espera pela geracao, em segundos.
+#
+# 20s nao e chute: medido neste projeto, o free tier do Gemini devolveu
+# respostas de comprimento SEMELHANTE em 3,2s, 51s e 91s. A variacao e da fila
+# do provedor, nao do tamanho do texto, entao esperar mais nao melhora a
+# chance -- so prolonga uma tela travada. Passando de 20s, a evidencia ja
+# recuperada vale mais na mao do usuario do que a sintese que talvez venha.
+#
+# Este valor viaja ate a camada de transporte do SDK (request_options), entao
+# a requisicao e ABORTADA de verdade. Ver a nota em GeminiProvider.generate
+# sobre por que asyncio.wait_for nao serviria aqui.
+DEFAULT_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
+
 # Códigos de finish_reason do Gemini que interessam ao contrato de evidência.
 FINISH_REASONS = {
     1: "STOP",
@@ -53,6 +66,17 @@ class LLMError(RuntimeError):
 
 class LLMUnavailable(LLMError):
     """O provedor não está configurado (credencial ausente, SDK faltando)."""
+
+
+class LLMTimeout(LLMError):
+    """
+    A geração passou do teto de espera (E3-04).
+
+    Subclasse de LLMError de propósito: quem já tratava falha de geração
+    continua tratando esta sem mudar nada. O tipo próprio existe para que a
+    causa apareça no log e na mensagem, já que "demorou" e "quebrou" pedem
+    reações diferentes de quem opera o sistema.
+    """
 
 
 @dataclass
@@ -76,7 +100,6 @@ class LLMProvider(ABC):
     def generate(self, system_prompt: str, user_prompt: str) -> LLMResponse:
         """Gera uma resposta. Deve levantar LLMError em caso de falha."""
 
-    @abstractmethod
     def health(self) -> dict:
         """Estado do provedor, para o endpoint de health."""
 
@@ -98,6 +121,7 @@ class GeminiProvider(LLMProvider):
         model: str = DEFAULT_GEMINI_MODEL,
         temperature: float = 0.2,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ):
         """
         Args:
@@ -109,6 +133,7 @@ class GeminiProvider(LLMProvider):
         self.model_name = model
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        self.timeout_seconds = timeout_seconds
         self._model = None
 
     def _ensure_model(self):
@@ -141,10 +166,25 @@ class GeminiProvider(LLMProvider):
         # que o prompt assume (regras antes das passagens).
         prompt = f"{system_prompt}\n\n---\n\n{user_prompt}"
 
+        # POR QUE request_options E NAO asyncio.wait_for (E3-04)
+        # -------------------------------------------------------
+        # `generate_content` e uma chamada BLOQUEANTE, e este caminho e todo
+        # sincrono: o endpoint do FastAPI e `def`, roda no threadpool, e
+        # aris.answer() e sincrono. `asyncio.wait_for` so cancela em pontos de
+        # await -- contra uma chamada bloqueante ela nao interrompe nada. O
+        # maximo que se consegue com executor + wait_for e PARAR DE ESPERAR,
+        # deixando a thread pendurada ate o provedor responder. Numa demo isso
+        # vaza uma thread por timeout.
+        #
+        # `request_options={"timeout": N}` desce ate o transporte do SDK e
+        # aborta a requisicao de fato. E o unico dos dois que realmente cumpre
+        # o que a issue pede.
         try:
-            response = model.generate_content(prompt)
+            response = model.generate_content(
+                prompt, request_options={"timeout": self.timeout_seconds}
+            )
         except Exception as error:  # noqa: BLE001
-            raise LLMError(f"Falha na chamada ao Gemini: {error}") from error
+            raise self._classify(error) from error
 
         text = getattr(response, "text", None)
         if not text or not text.strip():
@@ -169,6 +209,37 @@ class GeminiProvider(LLMProvider):
             output_tokens=getattr(usage, "candidates_token_count", None),
             finish_reason=finish,
         )
+
+    def _classify(self, error: Exception) -> LLMError:
+        """
+        Traduz a excecao do SDK para o vocabulario do contrato de evidencia.
+
+        Sem isto, estourar a quota, cair a rede e o servico do Google estar
+        fora viram a mesma string opaca. Sao situacoes distintas para quem
+        opera: a primeira passa a meia-noite, a segunda e local, a terceira
+        nao tem o que fazer. Todas levam a MESMA degradacao para o usuario --
+        a evidencia recuperada -- mas o log precisa saber a diferenca.
+        """
+        name = type(error).__name__
+        text = str(error)
+
+        # Nomes por string para nao acoplar ao import do google.api_core, que
+        # e dependencia transitiva e pode sair numa atualizacao do SDK.
+        if name in ("DeadlineExceeded", "GatewayTimeout", "RetryError") or (
+            "deadline" in text.lower() or "timeout" in text.lower()
+        ):
+            return LLMTimeout(
+                f"A geracao passou de {self.timeout_seconds:g}s e foi abortada."
+            )
+        if name == "ResourceExhausted" or "quota" in text.lower() or "429" in text:
+            # O caso mais provavel numa demo: free tier sao 20 requisicoes por
+            # dia por modelo.
+            return LLMUnavailable(f"Quota do provedor esgotada: {error}")
+        if name in ("ServiceUnavailable", "InternalServerError", "Unknown", "Aborted"):
+            return LLMUnavailable(f"Provedor indisponivel: {error}")
+        if name in ("Unauthenticated", "PermissionDenied"):
+            return LLMUnavailable(f"Credencial recusada pelo provedor: {error}")
+        return LLMError(f"Falha na chamada ao Gemini: {error}")
 
     def health(self) -> dict:
         return {

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Literal, Optional, Sequence
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +44,27 @@ INSUFFICIENT_EVIDENCE = (
     "Não encontrei evidência suficiente no corpus do SpaceBio para responder a "
     "essa pergunta. Prefiro dizer isso a arriscar uma resposta que eu não "
     "consiga sustentar com os artigos que temos indexados."
+)
+
+# E3-04 -- estado da resposta, para o cliente decidir COMO renderizar sem ter
+# de inferir isso de campos soltos.
+#
+# Antes, distinguir "recusei por falta de evidencia" de "achei a evidencia mas
+# nao consegui redigir" exigia cruzar `grounded`, `sources` e o texto de
+# `warnings`. Sao situacoes opostas para o usuario -- uma diz que o corpus nao
+# cobre o assunto, a outra que cobre e o provedor falhou -- e mereciam campo
+# proprio.
+AnswerStatus = Literal["ok", "synthesis_unavailable", "insufficient_evidence"]
+
+# Texto exibido quando a evidencia foi recuperada mas a sintese falhou.
+#
+# Deliberadamente neutro: numa demonstracao, "erro" e "falha" na tela fazem o
+# avaliador concluir que o sistema quebrou, quando na verdade ele degradou como
+# projetado e entregou o que importa -- as passagens. A causa exata (timeout,
+# quota, provedor fora) vai em `warnings`, para quem for auditar.
+SYNTHESIS_UNAVAILABLE = (
+    "Os documentos relevantes foram recuperados com sucesso, mas a síntese em "
+    "texto está temporariamente indisponível devido a uma falha de conexão."
 )
 
 # Citações no texto têm a forma [1], [2], [1, 3] ou [1][2].
@@ -143,6 +164,15 @@ class EvidenceAnswer(BaseModel):
     grounded: bool = Field(
         ...,
         description="A resposta está sustentada em evidência do corpus?",
+    )
+    status: AnswerStatus = Field(
+        "ok",
+        description=(
+            "ok: resposta sintetizada normalmente. "
+            "synthesis_unavailable: evidência recuperada, mas o provedor de "
+            "texto falhou ou estourou o tempo — as fontes estão completas. "
+            "insufficient_evidence: o corpus não sustenta a pergunta."
+        ),
     )
     warnings: List[str] = Field(default_factory=list)
     quote_checks: List[QuoteCheck] = Field(
@@ -418,6 +448,7 @@ def insufficient_evidence_answer(
 
     return EvidenceAnswer(
         answer=INSUFFICIENT_EVIDENCE,
+        status="insufficient_evidence",
         sources=[],
         retrieval=RetrievalTrace(
             query=query,
