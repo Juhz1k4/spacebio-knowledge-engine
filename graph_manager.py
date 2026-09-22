@@ -628,6 +628,89 @@ class Neo4jGraphManager:
 
         return written
 
+    # ------------------------------------------------------------------ #
+    # E3-06 — metadados bibliográficos
+    # ------------------------------------------------------------------ #
+
+    def fetch_publication_dois(
+        self, only_missing: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Lista as publicações a enriquecer com metadados do Crossref.
+
+        `only_missing=True` devolve apenas o que ainda não foi tentado ou
+        falhou por rede. Um DOI que o Crossref não tem (`not_found`) NÃO
+        volta: repetir a consulta em toda execução gastaria requisição para
+        confirmar uma ausência já conhecida.
+        """
+        condicao = (
+            "WHERE p.crossref_status IS NULL OR p.crossref_status = 'error'"
+            if only_missing
+            else ""
+        )
+        cypher = f"""
+        MATCH (p:Publication)
+        {condicao}
+        RETURN p.title AS title, p.doi AS doi, p.crossref_status AS status
+        ORDER BY p.title
+        """
+        with self.driver.session(database=self.database) as session:
+            return [dict(record) for record in session.run(cypher)]
+
+    def write_publication_metadata(self, records: Sequence[Dict[str, Any]]) -> int:
+        """
+        Grava os metadados bibliográficos nos nós :Publication.
+
+        Casado por `title`, que é a chave do MERGE em write_publication.
+
+        `authors` é gravado como lista de strings "Sobrenome, Nome" e não como
+        objetos: o Neo4j aceita arrays de primitivos, não de mapas. A forma
+        canônica única também evita que o frontend precise conhecer o esquema
+        do Crossref para montar uma citação.
+
+        UNWIND em vez de uma escrita por publicação: 488 transações separadas
+        levariam minutos, e a operação é idempotente — reexecutar sobrescreve
+        com o mesmo valor.
+        """
+        cypher = """
+        UNWIND $rows AS row
+        MATCH (p:Publication {title: row.title})
+        SET p.crossref_status = row.status,
+            p.authors = row.authors,
+            p.publication_year = row.year,
+            p.volume = row.volume,
+            p.issue = row.issue,
+            p.pages = row.pages,
+            p.publisher = row.publisher,
+            p.crossref_title = row.crossref_title,
+            p.crossref_container = row.container_title,
+            p.crossref_checked_at = datetime()
+        RETURN count(p) AS updated
+        """
+        with self.driver.session(database=self.database) as session:
+            result = session.run(cypher, rows=list(records)).single()
+            return result["updated"] if result else 0
+
+    def metadata_coverage(self) -> Dict[str, Any]:
+        """
+        Quantas publicações têm metadados utilizáveis para citação.
+
+        Serve ao relatório do job e à verificação de prontidão antes da
+        demonstração — uma citação sem autor nem ano é o defeito que só
+        aparece quando alguém clica em "Copiar ABNT" na frente da plateia.
+        """
+        cypher = """
+        MATCH (p:Publication)
+        RETURN count(p) AS total,
+               count(p.doi) AS com_doi,
+               sum(CASE WHEN p.crossref_status = 'enriched' THEN 1 ELSE 0 END) AS enriquecidas,
+               sum(CASE WHEN p.authors IS NOT NULL AND size(p.authors) > 0 THEN 1 ELSE 0 END) AS com_autores,
+               sum(CASE WHEN p.publication_year IS NOT NULL THEN 1 ELSE 0 END) AS com_ano
+        """
+        with self.driver.session(database=self.database) as session:
+            record = session.run(cypher).single()
+            return dict(record) if record else {}
+
     def write_publication_with_chunks(
         self,
         publication: PublicationRecord,

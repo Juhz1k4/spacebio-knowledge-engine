@@ -122,12 +122,25 @@ def test_semantic_search(repo: RetrievalRepository, embed) -> None:
     check(scores == sorted(scores, reverse=True), "resultados vêm ordenados por relevância")
 
     source = passages[0].to_source()
+    # Conjunto EXATO de propósito: a asserção existe para pegar campo
+    # acrescentado ou removido sem intenção. Quando o contrato muda de
+    # verdade, atualizar esta linha é parte da mudança -- foi o que aconteceu
+    # na E3-06, que acrescentou `citation`.
     check(
         set(source) == {
             "publication_id", "title", "url", "doi", "passage",
-            "section", "page", "relevance",
+            "section", "page", "relevance", "citation",
         },
         "to_source() cumpre o contrato de evidência do §14",
+    )
+    citacao = source["citation"]
+    check(
+        set(citacao) == {"authors", "year", "journal", "volume", "issue", "pages"},
+        "o bloco `citation` traz os campos que ABNT e BibTeX consomem (E3-06)",
+    )
+    check(
+        isinstance(citacao["authors"], list),
+        "autores sempre lista, mesmo quando a publicação não tem metadados",
     )
     # O §15.4 proíbe FABRICAR DOI, não tê-lo. Desde a regra R7 do cleaner, 488
     # das 493 publicações trazem o DOI real extraído do cabeçalho do PMC; as

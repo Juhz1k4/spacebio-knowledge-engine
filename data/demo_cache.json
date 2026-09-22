@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-22T21:20:13+00:00",
+  "generated_at": "2026-09-22T21:42:59+00:00",
   "similarity_threshold": 0.98,
   "entries": [
     {
@@ -408,7 +408,21 @@
             "channels": [
               "semantic"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Spatz, Jordan M.",
+                "Ko, Frank C.",
+                "Ayturk, Ugur M.",
+                "Warman, Matthew L.",
+                "Bouxsein, Mary L."
+              ],
+              "year": 2021,
+              "journal": "PLoS One",
+              "volume": "16",
+              "issue": "10",
+              "pages": "e0250715"
+            }
           },
           {
             "citation_index": 2,
@@ -425,7 +439,22 @@
             "channels": [
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Ellman, Rachel",
+                "Spatz, Jordan",
+                "Cloutier, Alison",
+                "Palme, Rupert",
+                "Christiansen, Blaine A",
+                "Bouxsein, Mary L"
+              ],
+              "year": 2012,
+              "journal": "J Bone Miner Res",
+              "volume": "28",
+              "issue": "4",
+              "pages": "875-885"
+            }
           },
           {
             "citation_index": 3,
@@ -442,7 +471,20 @@
             "channels": [
               "semantic"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Sultemeier, David R.",
+                "Choy, Kristel R.",
+                "Schweizer, Felix E.",
+                "Hoffman, Larry F."
+              ],
+              "year": 2017,
+              "journal": "J Neurophysiol",
+              "volume": "117",
+              "issue": "6",
+              "pages": "2163-2178"
+            }
           },
           {
             "citation_index": 4,
@@ -459,7 +501,22 @@
             "channels": [
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Kumar, Rachita K.",
+                "Singh, Nitin Kumar",
+                "Balakrishnan, Sanjaay",
+                "Parker, Ceth W.",
+                "Raman, Karthik",
+                "Venkateswaran, Kasthuri"
+              ],
+              "year": 2022,
+              "journal": "Microbiome",
+              "volume": "10",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 5,
@@ -476,7 +533,21 @@
             "channels": [
               "semantic"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Moreno-Villanueva, María",
+                "Wong, Michael",
+                "Lu, Tao",
+                "Zhang, Ye",
+                "Wu, Honglu"
+              ],
+              "year": 2017,
+              "journal": "NPJ Microgravity",
+              "volume": "3",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 6,
@@ -493,7 +564,22 @@
             "channels": [
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Kumar, Rachita K.",
+                "Singh, Nitin Kumar",
+                "Balakrishnan, Sanjaay",
+                "Parker, Ceth W.",
+                "Raman, Karthik",
+                "Venkateswaran, Kasthuri"
+              ],
+              "year": 2022,
+              "journal": "Microbiome",
+              "volume": "10",
+              "issue": "1",
+              "pages": null
+            }
           }
         ],
         "entities": [
@@ -964,7 +1050,25 @@
               "semantic",
               "entity"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Baio, Jonathan",
+                "Martinez, Aida F.",
+                "Silva, Ivan",
+                "Hoehn, Carla V.",
+                "Countryman, Stephanie",
+                "Bailey, Leonard",
+                "Hasaniya, Nahidh",
+                "Pecaut, Michael J.",
+                "Kearns-Jonker, Mary"
+              ],
+              "year": 2018,
+              "journal": "NPJ Microgravity",
+              "volume": "4",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 2,
@@ -982,7 +1086,25 @@
               "semantic",
               "entity"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Baio, Jonathan",
+                "Martinez, Aida F.",
+                "Silva, Ivan",
+                "Hoehn, Carla V.",
+                "Countryman, Stephanie",
+                "Bailey, Leonard",
+                "Hasaniya, Nahidh",
+                "Pecaut, Michael J.",
+                "Kearns-Jonker, Mary"
+              ],
+              "year": 2018,
+              "journal": "NPJ Microgravity",
+              "volume": "4",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 3,
@@ -1000,7 +1122,20 @@
               "lexical",
               "entity"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Pongkitwitoon, Suphannee",
+                "Uzer, Gunes",
+                "Rubin, Janet",
+                "Judex, Stefan"
+              ],
+              "year": 2016,
+              "journal": "Sci Rep",
+              "volume": "6",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 4,
@@ -1018,7 +1153,25 @@
               "semantic",
               "entity"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Baio, Jonathan",
+                "Martinez, Aida F.",
+                "Silva, Ivan",
+                "Hoehn, Carla V.",
+                "Countryman, Stephanie",
+                "Bailey, Leonard",
+                "Hasaniya, Nahidh",
+                "Pecaut, Michael J.",
+                "Kearns-Jonker, Mary"
+              ],
+              "year": 2018,
+              "journal": "NPJ Microgravity",
+              "volume": "4",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 5,
@@ -1036,7 +1189,26 @@
               "semantic",
               "entity"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Willey, Jeffrey S.",
+                "Britten, Richard A.",
+                "Blaber, Elizabeth",
+                "Tahimic, Candice G.T.",
+                "Chancellor, Jeffrey",
+                "Mortreux, Marie",
+                "Sanford, Larry D.",
+                "Kubik, Angela J.",
+                "Delp, Michael D.",
+                "Mao, Xiao Wen"
+              ],
+              "year": 2021,
+              "journal": "J Environ Sci Health C Toxicol Carcinog",
+              "volume": "39",
+              "issue": "2",
+              "pages": "129-179"
+            }
           },
           {
             "citation_index": 6,
@@ -1053,7 +1225,24 @@
             "channels": [
               "semantic"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Deymier, Alix C.",
+                "Schwartz, Andrea G.",
+                "Lim, Chanteak",
+                "Wingender, Brian",
+                "Kotiya, Akhilesh",
+                "Shen, Hua",
+                "Silva, Matthew J.",
+                "Thomopoulos, Stavros"
+              ],
+              "year": 2020,
+              "journal": "Bone",
+              "volume": "131",
+              "issue": null,
+              "pages": "115152"
+            }
           }
         ],
         "entities": [
@@ -1573,7 +1762,53 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "McDonald, J. Tyson",
+                "Kim, JangKeun",
+                "Farmerie, Lily",
+                "Johnson, Meghan L.",
+                "Trovao, Nidia S.",
+                "Arif, Shehbeel",
+                "Siew, Keith",
+                "Tsoy, Sergey",
+                "Bram, Yaron",
+                "Park, Jiwoon",
+                "Overbey, Eliah",
+                "Ryon, Krista",
+                "Haltom, Jeffrey",
+                "Singh, Urminder",
+                "Enguita, Francisco J.",
+                "Zaksas, Victoria",
+                "Guarnieri, Joseph W.",
+                "Topper, Michael",
+                "Wallace, Douglas C.",
+                "Meydan, Cem",
+                "Baylin, Stephen",
+                "Meller, Robert",
+                "Muratani, Masafumi",
+                "Porterfield, D. Marshall",
+                "Kaufman, Brett",
+                "Mori, Marcelo A.",
+                "Walsh, Stephen B.",
+                "Sigaudo-Roussel, Dominique",
+                "Mebarek, Saida",
+                "Bottini, Massimo",
+                "Marquette, Christophe A.",
+                "Wurtele, Eve Syrkin",
+                "Schwartz, Robert E.",
+                "Galeano, Diego",
+                "Mason, Christopher E.",
+                "Grabham, Peter",
+                "Beheshti, Afshin"
+              ],
+              "year": 2024,
+              "journal": "Nat Commun",
+              "volume": "15",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 2,
@@ -1591,7 +1826,19 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Manian, Vidya",
+                "Orozco-Sandoval, Jairo",
+                "Diaz-Martinez, Victor"
+              ],
+              "year": 2021,
+              "journal": "Genes (Basel)",
+              "volume": "12",
+              "issue": "6",
+              "pages": "938"
+            }
           },
           {
             "citation_index": 3,
@@ -1609,7 +1856,19 @@
               "semantic",
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Manian, Vidya",
+                "Orozco-Sandoval, Jairo",
+                "Diaz-Martinez, Victor"
+              ],
+              "year": 2021,
+              "journal": "Genes (Basel)",
+              "volume": "12",
+              "issue": "6",
+              "pages": "938"
+            }
           },
           {
             "citation_index": 4,
@@ -1627,7 +1886,20 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Zupanska, Agata K.",
+                "LeFrois, Collin",
+                "Ferl, Robert J.",
+                "Paul, Anna-Lisa"
+              ],
+              "year": 2019,
+              "journal": "Int J Mol Sci",
+              "volume": "20",
+              "issue": "2",
+              "pages": "390"
+            }
           },
           {
             "citation_index": 5,
@@ -1645,7 +1917,20 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Sng, Natasha J",
+                "Kolaczkowski, Bryan",
+                "Ferl, Robert J",
+                "Paul, Anna-Lisa"
+              ],
+              "year": 2018,
+              "journal": "AoB Plants",
+              "volume": "11",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 6,
@@ -1663,7 +1948,21 @@
               "lexical",
               "entity"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Beheshti, Afshin",
+                "McDonald, J. Tyson",
+                "Miller, Jack",
+                "Grabham, Peter",
+                "Costes, Sylvain V."
+              ],
+              "year": 2019,
+              "journal": "Int J Mol Sci",
+              "volume": "20",
+              "issue": "3",
+              "pages": "661"
+            }
           }
         ],
         "entities": [
@@ -2141,7 +2440,21 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Moreno-Villanueva, María",
+                "Wong, Michael",
+                "Lu, Tao",
+                "Zhang, Ye",
+                "Wu, Honglu"
+              ],
+              "year": 2017,
+              "journal": "NPJ Microgravity",
+              "volume": "3",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 2,
@@ -2159,7 +2472,28 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Zhang, Ye",
+                "Richards, Jeffrey T.",
+                "Feiveson, Alan H.",
+                "Richards, Stephanie E.",
+                "Neelam, Srujana",
+                "Dreschel, Thomas W.",
+                "Plante, Ianik",
+                "Hada, Megumi",
+                "Wu, Honglu",
+                "Massa, Gioia D.",
+                "Douglas, Grace L.",
+                "Levine, Howard G."
+              ],
+              "year": 2022,
+              "journal": "Life (Basel)",
+              "volume": "12",
+              "issue": "2",
+              "pages": "144"
+            }
           },
           {
             "citation_index": 3,
@@ -2177,7 +2511,21 @@
               "semantic",
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Moreno-Villanueva, María",
+                "Wong, Michael",
+                "Lu, Tao",
+                "Zhang, Ye",
+                "Wu, Honglu"
+              ],
+              "year": 2017,
+              "journal": "NPJ Microgravity",
+              "volume": "3",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 4,
@@ -2195,7 +2543,21 @@
               "semantic",
               "lexical"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Moreno-Villanueva, María",
+                "Wong, Michael",
+                "Lu, Tao",
+                "Zhang, Ye",
+                "Wu, Honglu"
+              ],
+              "year": 2017,
+              "journal": "NPJ Microgravity",
+              "volume": "3",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 5,
@@ -2212,7 +2574,21 @@
             "channels": [
               "semantic"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Moreno-Villanueva, María",
+                "Wong, Michael",
+                "Lu, Tao",
+                "Zhang, Ye",
+                "Wu, Honglu"
+              ],
+              "year": 2017,
+              "journal": "NPJ Microgravity",
+              "volume": "3",
+              "issue": "1",
+              "pages": null
+            }
           },
           {
             "citation_index": 6,
@@ -2229,7 +2605,19 @@
             "channels": [
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Crabbé, Aurélie",
+                "Ledesma, Maria A.",
+                "Nickerson, Cheryl A."
+              ],
+              "year": 2014,
+              "journal": "Pathog Dis",
+              "volume": "71",
+              "issue": "1",
+              "pages": "1-19"
+            }
           }
         ],
         "entities": [
@@ -2699,7 +3087,25 @@
             "channels": [
               "semantic"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Laranjeiro, Ricardo",
+                "Harinath, Girish",
+                "Pollard, Amelia K.",
+                "Gaffney, Christopher J.",
+                "Deane, Colleen S.",
+                "Vanapalli, Siva A.",
+                "Etheridge, Timothy",
+                "Szewczyk, Nathaniel J.",
+                "Driscoll, Monica"
+              ],
+              "year": 2021,
+              "journal": "iScience",
+              "volume": "24",
+              "issue": "2",
+              "pages": "102105"
+            }
           },
           {
             "citation_index": 2,
@@ -2716,7 +3122,19 @@
             "channels": [
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Crabbé, Aurélie",
+                "Ledesma, Maria A.",
+                "Nickerson, Cheryl A."
+              ],
+              "year": 2014,
+              "journal": "Pathog Dis",
+              "volume": "71",
+              "issue": "1",
+              "pages": "1-19"
+            }
           },
           {
             "citation_index": 3,
@@ -2733,7 +3151,24 @@
             "channels": [
               "semantic"
             ],
-            "cited": true
+            "cited": true,
+            "citation": {
+              "authors": [
+                "Deymier, Alix C.",
+                "Schwartz, Andrea G.",
+                "Lim, Chanteak",
+                "Wingender, Brian",
+                "Kotiya, Akhilesh",
+                "Shen, Hua",
+                "Silva, Matthew J.",
+                "Thomopoulos, Stavros"
+              ],
+              "year": 2020,
+              "journal": "Bone",
+              "volume": "131",
+              "issue": null,
+              "pages": "115152"
+            }
           },
           {
             "citation_index": 4,
@@ -2750,7 +3185,28 @@
             "channels": [
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Barrila, Jennifer",
+                "Crabbé, Aurélie",
+                "Yang, Jiseon",
+                "Franco, Karla",
+                "Nydam, Seth D.",
+                "Forsyth, Rebecca J.",
+                "Davis, Richard R.",
+                "Gangaraju, Sandhya",
+                "Ott, C. Mark",
+                "Coyne, Carolyn B.",
+                "Bissell, Mina J.",
+                "Nickerson, Cheryl A."
+              ],
+              "year": 2018,
+              "journal": "Infect Immun",
+              "volume": "86",
+              "issue": "11",
+              "pages": null
+            }
           },
           {
             "citation_index": 5,
@@ -2767,7 +3223,31 @@
             "channels": [
               "semantic"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Mhatre, Siddhita D.",
+                "Iyer, Janani",
+                "Petereit, Juli",
+                "Dolling-Boreham, Roberta M.",
+                "Tyryshkina, Anastasia",
+                "Paul, Amber M.",
+                "Gilbert, Rachel",
+                "Jensen, Matthew",
+                "Woolsey, Rebekah J.",
+                "Anand, Sulekha",
+                "Sowa, Marianne B.",
+                "Quilici, David R.",
+                "Costes, Sylvain V.",
+                "Girirajan, Santhosh",
+                "Bhattacharya, Sharmila"
+              ],
+              "year": 2022,
+              "journal": "Cell Rep",
+              "volume": "40",
+              "issue": "10",
+              "pages": "111279"
+            }
           },
           {
             "citation_index": 6,
@@ -2784,7 +3264,29 @@
             "channels": [
               "lexical"
             ],
-            "cited": false
+            "cited": false,
+            "citation": {
+              "authors": [
+                "Kong, Yingzhen",
+                "Peña, Maria J.",
+                "Renna, Luciana",
+                "Avci, Utku",
+                "Pattathil, Sivakumar",
+                "Tuomivaara, Sami T.",
+                "Li, Xuemei",
+                "Reiter, Wolf-Dieter",
+                "Brandizzi, Federica",
+                "Hahn, Michael G.",
+                "Darvill, Alan G.",
+                "York, William S.",
+                "O’Neill, Malcolm A."
+              ],
+              "year": 2015,
+              "journal": "Plant Physiol",
+              "volume": "167",
+              "issue": "4",
+              "pages": "1296-1306"
+            }
           }
         ],
         "entities": [

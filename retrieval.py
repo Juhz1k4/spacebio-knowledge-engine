@@ -143,6 +143,19 @@ class EvidencePassage:
     doi: Optional[str] = None
     journal: Optional[str] = None
 
+    # E3-06 -- metadados bibliográficos vindos do Crossref, gravados no grafo
+    # por `enrich_metadata.py`. Chegam junto da passagem porque a alternativa
+    # seria o frontend consultar a rede uma vez por cartão de fonte, somando
+    # seis idas externas ao caminho de leitura de cada resposta.
+    #
+    # Todos opcionais: 5 das 493 publicações não têm DOI e portanto não têm
+    # registro no Crossref. A citação delas cai na forma simplificada.
+    authors: Optional[List[str]] = None
+    publication_year: Optional[int] = None
+    volume: Optional[str] = None
+    issue: Optional[str] = None
+    pages: Optional[str] = None
+
     def to_source(self) -> Dict[str, Any]:
         """
         Serializa no formato de `sources` do Scientific Evidence Contract (§14).
@@ -160,6 +173,18 @@ class EvidencePassage:
             "section": self.section,
             "page": self.page,
             "relevance": round(self.score, 4),
+            # Agrupado, e não sete campos soltos no topo: o bloco inteiro é
+            # o que a formatação de citação consome, e mantê-lo junto deixa
+            # claro que ele vem de uma origem só (Crossref) e pode faltar
+            # inteiro.
+            "citation": {
+                "authors": self.authors or [],
+                "year": self.publication_year,
+                "journal": self.journal,
+                "volume": self.volume,
+                "issue": self.issue,
+                "pages": self.pages,
+            },
         }
 
 
@@ -215,6 +240,11 @@ def _passage_from_record(record: Dict[str, Any]) -> EvidencePassage:
         score=float(record["score"]),
         doi=record.get("doi"),
         journal=record.get("journal"),
+        authors=record.get("authors"),
+        publication_year=record.get("publication_year"),
+        volume=record.get("volume"),
+        issue=record.get("issue"),
+        pages=record.get("pages"),
     )
 
 
@@ -290,6 +320,11 @@ class RetrievalRepository:
            p.source_url  AS source_url,
            p.doi         AS doi,
            p.journal     AS journal,
+           p.authors AS authors,
+           p.publication_year AS publication_year,
+           p.volume AS volume,
+           p.issue AS issue,
+           p.pages AS pages,
            score
     ORDER BY score DESC
     LIMIT $top_k
@@ -314,6 +349,11 @@ class RetrievalRepository:
                p.source_url  AS source_url,
                p.doi         AS doi,
                p.journal     AS journal,
+               p.authors AS authors,
+               p.publication_year AS publication_year,
+               p.volume AS volume,
+               p.issue AS issue,
+               p.pages AS pages,
                score
         ORDER BY score DESC
         LIMIT $top_k
@@ -429,6 +469,11 @@ class RetrievalRepository:
                p.source_url  AS source_url,
                p.doi         AS doi,
                p.journal     AS journal,
+               p.authors AS authors,
+               p.publication_year AS publication_year,
+               p.volume AS volume,
+               p.issue AS issue,
+               p.pages AS pages,
                score
         ORDER BY score DESC
         LIMIT $top_k
@@ -614,6 +659,11 @@ class RetrievalRepository:
                p.source_url  AS source_url,
                p.doi         AS doi,
                p.journal     AS journal,
+               p.authors AS authors,
+               p.publication_year AS publication_year,
+               p.volume AS volume,
+               p.issue AS issue,
+               p.pages AS pages,
                0.0           AS score
         """
         rows = self._run(cypher, chunk_ids=list(chunk_ids))
@@ -765,6 +815,11 @@ class RetrievalRepository:
                p.source_url AS source_url,
                p.doi        AS doi,
                p.journal    AS journal,
+               p.authors AS authors,
+               p.publication_year AS publication_year,
+               p.volume AS volume,
+               p.issue AS issue,
+               p.pages AS pages,
                0.0          AS score
         ORDER BY c.position ASC
         LIMIT $limit

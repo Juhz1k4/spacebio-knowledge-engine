@@ -426,9 +426,93 @@ def build_cache(
     return 0
 
 
+def refresh_metadata(threshold: float) -> int:
+    """
+    Atualiza os metadados bibliográficos das fontes já cacheadas (E3-06).
+
+    POR QUE NÃO SIMPLESMENTE REGERAR
+    --------------------------------
+    Enriquecer metadados não muda uma vírgula do texto gerado: a resposta da
+    Dra. Aris, suas citações [n] e os trechos recuperados continuam os mesmos.
+    O que mudou foi o que se sabe SOBRE as publicações -- autores e ano, que
+    vieram do Crossref depois.
+
+    Regerar custaria uma chamada de LLM por pergunta do roteiro, e o free tier
+    são 20 por dia. Gastar quota para reescrever um texto idêntico é o tipo de
+    desperdício que só se percebe quando ela acaba na véspera.
+
+    O casamento é por `chunk_id`, que é determinístico e identifica o trecho
+    exato de onde a publicação vem.
+    """
+    from graph_manager import build_driver
+    from ontology import ONTOLOGY_VERSION
+    from retrieval import RetrievalRepository
+
+    cache = DemoCache(threshold=threshold)
+    if not cache.entries:
+        print("Cache vazio: nada a atualizar.")
+        return 1
+
+    chunk_ids = [
+        source["chunk_id"]
+        for entry in cache.entries
+        for source in entry.answer.get("sources", [])
+        if source.get("chunk_id")
+    ]
+    if not chunk_ids:
+        print("Nenhuma fonte com chunk_id no cache.")
+        return 1
+
+    driver = build_driver()
+    try:
+        repo = RetrievalRepository(driver)
+        # Busca as passagens atuais, que agora trazem os metadados do Crossref.
+        atuais = {p.chunk_id: p for p in repo.passages_by_ids(chunk_ids)}
+    finally:
+        driver.close()
+
+    atualizadas = faltantes = 0
+    for entry in cache.entries:
+        for source in entry.answer.get("sources", []):
+            passagem = atuais.get(source.get("chunk_id"))
+            if passagem is None:
+                faltantes += 1
+                continue
+            source["citation"] = {
+                "authors": passagem.authors or [],
+                "year": passagem.publication_year,
+                "journal": passagem.journal,
+                "volume": passagem.volume,
+                "issue": passagem.issue,
+                "pages": passagem.pages,
+            }
+            atualizadas += 1
+
+    cache.save(cache.entries)
+    print(f"  {atualizadas} fonte(s) com metadados atualizados")
+    if faltantes:
+        print(f"  {faltantes} fonte(s) sem correspondência no grafo (chunk removido?)")
+
+    completas = sum(
+        1
+        for entry in cache.entries
+        for source in entry.answer.get("sources", [])
+        if source.get("citation", {}).get("authors")
+        and source.get("citation", {}).get("year")
+    )
+    print(f"  {completas}/{atualizadas} com autores E ano (citação completa)")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="SPACEBIO-015.1 — cache de demonstração")
     parser.add_argument("--build", action="store_true", help="gerar o cache do roteiro")
+    parser.add_argument(
+        "--refresh-metadata",
+        dest="refresh_metadata",
+        action="store_true",
+        help="atualizar só os metadados bibliográficos, sem chamar o LLM",
+    )
     parser.add_argument(
         "--rebuild",
         action="store_true",
@@ -444,6 +528,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
     try:
+        if args.refresh_metadata:
+            return refresh_metadata(args.threshold)
+
         if args.build or args.rebuild:
             return build_cache(DEMO_QUESTIONS, args.threshold, rebuild=args.rebuild)
 

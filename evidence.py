@@ -71,6 +71,41 @@ SYNTHESIS_UNAVAILABLE = (
 CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 
+class CitationMetadata(BaseModel):
+    """
+    Metadados bibliográficos de uma fonte, para montar a referência (E3-06).
+
+    Vêm do Crossref, ingeridos no grafo por `enrich_metadata.py` e entregues
+    JUNTO da resposta -- não buscados sob demanda. A alternativa seria o
+    frontend consultar a rede uma vez por cartão de fonte, somando seis idas
+    externas ao caminho de leitura e fazendo a apresentação depender de o
+    Crossref estar no ar naquele minuto.
+
+    Todos os campos podem faltar. Cobertura medida no corpus: 488 de 493
+    publicações (99,0%) têm autores e ano; as 5 restantes não têm DOI, então
+    não há registro a buscar. A formatação precisa produzir algo útil mesmo
+    assim -- ver `citation.ts` no frontend.
+    """
+
+    authors: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Autores em forma canônica 'Sobrenome, Nome'. Consórcios e "
+            "instituições vêm sem vírgula, e a formatação os reconhece por isso."
+        ),
+    )
+    year: Optional[int] = None
+    journal: Optional[str] = None
+    volume: Optional[str] = None
+    issue: Optional[str] = None
+    pages: Optional[str] = None
+
+    @property
+    def is_complete(self) -> bool:
+        """Tem o mínimo para uma referência de verdade: autor E ano."""
+        return bool(self.authors and self.year)
+
+
 class EvidenceSource(BaseModel):
     """Uma fonte citável — trecho real, com rastro até a publicação."""
 
@@ -102,6 +137,13 @@ class EvidenceSource(BaseModel):
     cited: bool = Field(
         default=False,
         description="A resposta realmente citou esta fonte? Verificado, não presumido.",
+    )
+    citation: CitationMetadata = Field(
+        default_factory=CitationMetadata,
+        description=(
+            "Metadados bibliográficos para exportar em ABNT ou BibTeX (E3-06). "
+            "Campos vazios quando a publicação não tem DOI."
+        ),
     )
 
 
@@ -213,6 +255,14 @@ def build_sources(results: Sequence[HybridResult]) -> List[EvidenceSource]:
                 relevance=round(result.score, 6),
                 chunk_id=passage.chunk_id,
                 channels=result.matched_channels,
+                citation=CitationMetadata(
+                    authors=passage.authors or [],
+                    year=passage.publication_year,
+                    journal=passage.journal,
+                    volume=passage.volume,
+                    issue=passage.issue,
+                    pages=passage.pages,
+                ),
             )
         )
     return sources

@@ -40,3 +40,9 @@ data/raw_pdfs/
 # Saída derivada do cleaner (SPACEBIO-012.5): reproduzível a partir de
 # data/processed_text/ rodando `python cleaner.py`. Não versionar.
 data/clean_text/
+
+# Cache HTTP das respostas do Crossref (E3-06). 14 MB de payload bruto,
+# regeneravel em ~3 min com `python enrich_metadata.py --all`. O dado que o
+# projeto de fato usa -- autores, ano, volume -- vive no grafo, gravado pelo
+# job. Versionar cache de API so incha o repositorio.
+data/crossref_metadata.json
