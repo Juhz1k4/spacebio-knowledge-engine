@@ -40,6 +40,7 @@ from evidence import (
     insufficient_evidence_answer,
     verify_citations,
 )
+from intent import MetaIntent, classify as classify_intent
 from llm_provider import LLMError, LLMProvider, LLMUnavailable, default_provider
 from prompts import SYSTEM_PROMPT, build_user_prompt
 from retrieval import RetrievalRepository
@@ -57,6 +58,46 @@ EVIDENCE_THRESHOLD = float(os.getenv("EVIDENCE_THRESHOLD", "0.72"))
 # Quantas passagens vão ao prompt. Acima de ~8 o modelo começa a diluir a
 # atenção e a citar menos; abaixo de 3 ele fica sem material para relacionar.
 DEFAULT_TOP_K = 6
+
+
+def meta_answer(
+    question: str, intent: MetaIntent, threshold: float
+) -> EvidenceAnswer:
+    """
+    Constrói a resposta para uma pergunta operacional.
+
+    Devolve o mesmo EvidenceAnswer de sempre, para que o cliente não precise
+    de um caminho especial. Dois campos merecem atenção:
+
+    `grounded=False` — a resposta NÃO vem do corpus, e o contrato precisa
+    dizer isso. Marcar como fundamentada seria mentir: não há passagem
+    nenhuma sustentando o texto, ele é escrito por nós.
+
+    `sources=[]` — não há o que citar. É coerente com grounded=False, e a
+    interface já trata esse par: `isEvidenceRefusal()` no frontend distingue
+    "sem fontes" de "com fontes mas sem síntese".
+
+    O warning identifica a natureza da resposta, para que ninguém a confunda
+    com recuperação do corpus numa avaliação.
+    """
+    return EvidenceAnswer(
+        answer=intent.answer,
+        sources=[],
+        entities=[],
+        retrieval=RetrievalTrace(
+            query=question,
+            chunks_considered=0,
+            chunks_used=0,
+            top_score=None,
+            evidence_threshold=threshold,
+            channels=[],
+        ),
+        grounded=False,
+        warnings=[
+            "Resposta sobre o funcionamento do sistema, escrita por nós — "
+            "não foi recuperada do corpus científico."
+        ],
+    )
 
 
 class DraAris:
@@ -106,6 +147,16 @@ class DraAris:
         question = question.strip()
         top_k = top_k or self.top_k
         started = time.time()
+
+        # --- Roteamento de intenção, antes de tudo ---
+        # "Quem é você?" não tem resposta no corpus, e seguir o caminho normal
+        # devolveria a recusa por falta de evidência — tecnicamente correta e
+        # péssima para quem só quer entender a ferramenta. Também economiza a
+        # quota do LLM, que perguntas operacionais consumiriam à toa.
+        meta = classify_intent(question)
+        if meta is not None:
+            log.info("Intenção operacional (%s): %r", meta.name, question[:50])
+            return meta_answer(question, meta, self.threshold)
 
         # --- Recuperação ---
         vector = self.embeddings.embed_query(question)
@@ -240,6 +291,18 @@ class DraAris:
             warnings=warnings,
         )
 
+    # ------------------------------------------------------------------ #
+
+    def health(self) -> dict:
+        stats = self.repository.corpus_stats()
+        return {
+            "llm": self.provider.health(),
+            "corpus": stats,
+            "evidence_threshold": self.threshold,
+            "top_k": self.top_k,
+            "demo_cache": len(self.demo_cache) if self.demo_cache else 0,
+        }
+
     def _entities_for(self, chunk_ids: List[str]) -> List[dict]:
         """
         Entidades da ontologia presentes nas passagens citadas (§14).
@@ -289,16 +352,6 @@ class DraAris:
             grounded=False,
             warnings=[f"Geração indisponível: {error}"],
         )
-
-    def health(self) -> dict:
-        stats = self.repository.corpus_stats()
-        return {
-            "llm": self.provider.health(),
-            "corpus": stats,
-            "evidence_threshold": self.threshold,
-            "top_k": self.top_k,
-        }
-
 
 if __name__ == "__main__":
     import argparse
