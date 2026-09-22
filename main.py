@@ -105,7 +105,19 @@ async def lifespan(app: FastAPI):
             from aris import DraAris
             from embedder import EmbeddingService
 
-            app.state.aris = DraAris(app.state.retrieval, EmbeddingService())
+            # Cache de demonstração (SPACEBIO-015.1), desligado por padrão.
+            # Só entra com DEMO_MODE=true: uma avaliação precisa saber se está
+            # vendo geração ao vivo ou resposta pré-computada.
+            cache = None
+            if os.getenv("DEMO_MODE", "").lower() in ("1", "true", "yes"):
+                from demo_cache import DemoCache
+
+                cache = DemoCache()
+                print(f"DEMO_MODE ativo: {len(cache)} resposta(s) em cache.")
+
+            app.state.aris = DraAris(
+                app.state.retrieval, EmbeddingService(), demo_cache=cache
+            )
             print("Dra. Aris pronta (SPACEBIO-014 + 015).")
         except Exception as error:  # noqa: BLE001
             print(f"!!! Dra. Aris indisponível: {error}")

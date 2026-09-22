@@ -74,12 +74,22 @@ class DraAris:
         provider: Optional[LLMProvider] = None,
         threshold: float = EVIDENCE_THRESHOLD,
         top_k: int = DEFAULT_TOP_K,
+        demo_cache=None,
     ):
+        """
+        Args:
+            demo_cache: DemoCache opcional (SPACEBIO-015.1). Quando presente,
+                perguntas do roteiro são servidas sem acionar o LLM — protege
+                a apresentação do limite de 20 requisições/dia do free tier.
+                Desligado por padrão: o cache só entra quando explicitamente
+                injetado, para que ninguém avalie o sistema sem saber disso.
+        """
         self.repository = repository
         self.embeddings = embedding_service
         self.provider = provider or default_provider()
         self.threshold = threshold
         self.top_k = top_k
+        self.demo_cache = demo_cache
 
     # ------------------------------------------------------------------ #
 
@@ -99,6 +109,25 @@ class DraAris:
 
         # --- Recuperação ---
         vector = self.embeddings.embed_query(question)
+
+        # --- Cache de demonstração (SPACEBIO-015.1) ---
+        # Consultado DEPOIS de vetorizar (a chave é o embedding) e ANTES da
+        # busca, que é o trabalho caro. Uma falha aqui nunca derruba a
+        # resposta: o cache é conveniência, não caminho crítico.
+        if self.demo_cache is not None:
+            try:
+                from demo_cache import mark_as_cached
+                from ontology import ONTOLOGY_VERSION
+
+                hit = self.demo_cache.lookup(
+                    vector, self.embeddings.model_name, ONTOLOGY_VERSION
+                )
+                if hit is not None:
+                    log.info("Cache de demonstração: HIT para %r", question[:50])
+                    return EvidenceAnswer(**mark_as_cached(hit.answer, hit))
+            except Exception as error:  # noqa: BLE001
+                log.warning("Cache de demonstração falhou (%s); seguindo ao vivo.", error)
+
         results = self.repository.hybrid_search(question, vector, top_k=top_k)
 
         if not results:
