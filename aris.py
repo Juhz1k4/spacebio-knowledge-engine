@@ -179,26 +179,31 @@ class DraAris:
             log.info("Intenção operacional (%s): %r", meta.name, question[:50])
             return meta_answer(question, meta, self.threshold)
 
+        # --- Cache de demonstração, 1º passe: casamento EXATO (E3-05) ---
+        #
+        # Vem antes de vetorizar de propósito. A consulta por similaridade
+        # precisa do embedding da pergunta, e obtê-lo é uma passagem pelo
+        # modelo -- dezenas de milissegundos gastos ANTES de saber se há
+        # acerto. Num roteiro de demonstração a pergunta é clicada ou digitada
+        # exatamente como foi cacheada, então o caminho comum não paga isso.
+        #
+        # É o que torna o acerto sub-100ms possível: uma busca em tabela hash.
+        if self.demo_cache is not None:
+            cached = self._cache_hit(question, vector=None)
+            if cached is not None:
+                return cached
+
         # --- Recuperação ---
         vector = self.embeddings.embed_query(question)
 
-        # --- Cache de demonstração (SPACEBIO-015.1) ---
-        # Consultado DEPOIS de vetorizar (a chave é o embedding) e ANTES da
-        # busca, que é o trabalho caro. Uma falha aqui nunca derruba a
-        # resposta: o cache é conveniência, não caminho crítico.
+        # --- Cache de demonstração, 2º passe: por similaridade ---
+        # Apanha a MESMA pergunta reescrita ("como a microgravidade afeta os
+        # ossos?"), que o casamento exato não pega. Ainda vem antes da busca
+        # no grafo, que é o trabalho caro.
         if self.demo_cache is not None:
-            try:
-                from demo_cache import mark_as_cached
-                from ontology import ONTOLOGY_VERSION
-
-                hit = self.demo_cache.lookup(
-                    vector, self.embeddings.model_name, ONTOLOGY_VERSION
-                )
-                if hit is not None:
-                    log.info("Cache de demonstração: HIT para %r", question[:50])
-                    return EvidenceAnswer(**mark_as_cached(hit.answer, hit))
-            except Exception as error:  # noqa: BLE001
-                log.warning("Cache de demonstração falhou (%s); seguindo ao vivo.", error)
+            cached = self._cache_hit(question, vector=vector)
+            if cached is not None:
+                return cached
 
         results = self.repository.hybrid_search(question, vector, top_k=top_k)
 
@@ -371,6 +376,44 @@ class DraAris:
         except Exception as error:  # noqa: BLE001
             log.warning("Não foi possível anexar entidades: %s", error)
             return []
+
+    def _cache_hit(self, question: str, vector) -> Optional[EvidenceAnswer]:
+        """
+        Consulta o cache de demonstração, por texto ou por vetor (E3-05).
+
+        `vector=None` faz o casamento exato, que não precisa de embedding;
+        com vetor, faz o de similaridade.
+
+        Uma falha aqui NUNCA derruba a resposta: o cache é conveniência, e um
+        JSON corrompido na véspera da demonstração não pode ser a diferença
+        entre o sistema responder e não responder. O caminho ao vivo continua
+        logo abaixo.
+        """
+        try:
+            from demo_cache import mark_as_cached, prompt_fingerprint
+            from ontology import ONTOLOGY_VERSION
+
+            fingerprint = prompt_fingerprint()
+            if vector is None:
+                hit = self.demo_cache.lookup_exact(
+                    question, self.embeddings.model_name, ONTOLOGY_VERSION, fingerprint
+                )
+            else:
+                hit = self.demo_cache.lookup(
+                    vector, self.embeddings.model_name, ONTOLOGY_VERSION, fingerprint
+                )
+            if hit is None:
+                return None
+
+            log.info(
+                "Cache de demonstração: HIT %s para %r",
+                "exato" if vector is None else "por similaridade",
+                question[:50],
+            )
+            return EvidenceAnswer(**mark_as_cached(hit.answer, hit))
+        except Exception as error:  # noqa: BLE001
+            log.warning("Cache de demonstração falhou (%s); seguindo ao vivo.", error)
+            return None
 
     def _evidence_only_answer(
         self,
