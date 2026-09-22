@@ -13,17 +13,27 @@ Liga tudo o que a Fase 1 construiu:
        -> EvidenceAnswer            (SPACEBIO-014)
 
 O que distingue este fluxo de "RAG com um prompt bom": ele nunca confia na
-palavra do modelo. Duas travas independentes:
+palavra do modelo. Três travas independentes, cada uma pegando o que a
+anterior deixa passar.
 
 TRAVA 1 — antes do modelo. Se a melhor passagem recuperada fica abaixo do
 limiar de similaridade, a pergunta é recusada sem gastar uma chamada de API.
-Medido neste corpus: perguntas do domínio pontuam 0,89–0,92 e perguntas fora
-dele 0,59–0,66; o limiar de 0,72 fica no vão entre os dois.
+Calibrado para o multilingual-e5-small: perguntas do domínio pontuam
+0,921–0,963 e perguntas fora dele 0,865–0,916. A margem é estreita e o limiar
+sozinho NÃO separa os dois grupos — ele barra o caso óbvio, e é por isso que
+existem as outras duas.
 
-TRAVA 2 — depois do modelo. As citações [n] do texto são conferidas contra as
-fontes que existem. Citação fora do intervalo é fabricação: fica registrada em
-`warnings` e a resposta é marcada como não fundamentada. Uma resposta que não
-cita nada também não passa.
+TRAVA 2 — depois do modelo, sobre os marcadores. As citações [n] são
+conferidas contra as fontes que existem. Citação fora do intervalo é
+fabricação: fica registrada em `warnings` e a resposta é marcada como não
+fundamentada. Uma resposta que não cita nada também não passa.
+
+TRAVA 3 — depois do modelo, sobre o texto (E3-02). Cada trecho entre aspas é
+procurado literalmente nas passagens. A trava 2 conferia de onde a afirmação
+veio, não o que foi escrito entre aspas: uma frase inventada, ou uma frase do
+artigo traduzida para o português, apontando para uma fonte que existe passava
+inteira. Reprovado, o trecho perde as aspas e a falha vai para `quote_checks`.
+Ver `evidence.validate_quotes`.
 """
 
 from __future__ import annotations
@@ -38,6 +48,7 @@ from evidence import (
     RetrievalTrace,
     build_sources,
     insufficient_evidence_answer,
+    validate_quotes,
     verify_citations,
 )
 from intent import MetaIntent, classify as classify_intent
@@ -259,14 +270,38 @@ class DraAris:
                 "em que evidência ela se apoia."
             )
 
+        # --- TRAVA 3: o que esta entre aspas existe mesmo? (E3-02) ---
+        #
+        # A trava 2 confere o marcador [n]; esta confere o texto. Uma citacao
+        # literal inventada, ou traduzida do ingles, passa pela trava 2 sem
+        # dificuldade -- basta apontar para uma fonte que existe.
+        #
+        # Nao derruba `grounded`: a resposta ja e julgada pelas citacoes, e
+        # recusar de novo pelo mesmo material puniria o usuario por um defeito
+        # de formatacao. O que muda e que o trecho deixa de se apresentar como
+        # transcricao, e a falha fica registrada no payload.
+        quote_audit = validate_quotes(answer_text, sources)
+        answer_text = quote_audit["answer"]
+
+        if quote_audit["unverified"]:
+            reprovadas = [c.quote for c in quote_audit["checks"] if not c.verified]
+            warnings.append(
+                f"{quote_audit['unverified']} de {quote_audit['examined']} trecho(s) "
+                "entre aspas nao foram encontrados literalmente nas passagens e "
+                "tiveram as aspas removidas -- podem ter sido traduzidos ou "
+                f"reformulados: {'; '.join(repr(q[:60]) for q in reprovadas)}"
+            )
+
         grounded = bool(verification["cited"]) and not verification["invalid"]
 
         elapsed = time.time() - started
         log.info(
-            "Resposta em %.2fs: %d/%d fontes citadas, grounded=%s",
+            "Resposta em %.2fs: %d/%d fontes citadas, %d/%d aspas conferidas, grounded=%s",
             elapsed,
             verification["used"],
             len(sources),
+            quote_audit["verified"],
+            quote_audit["examined"],
             grounded,
         )
 
@@ -292,6 +327,7 @@ class DraAris:
             ),
             grounded=grounded,
             warnings=warnings,
+            quote_checks=quote_audit["checks"],
         )
 
     # ------------------------------------------------------------------ #

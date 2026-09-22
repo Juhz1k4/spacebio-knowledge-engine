@@ -30,6 +30,7 @@ detectada e reportada, nunca silenciada.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field
@@ -103,6 +104,28 @@ class RetrievalTrace(BaseModel):
     channels: List[str] = Field(default_factory=list)
 
 
+class QuoteCheck(BaseModel):
+    """
+    Resultado da conferencia de um trecho entre aspas (E3-02).
+
+    Vai no payload para que a auditoria seja possivel do lado de fora: quem le
+    a resposta consegue ver o que foi conferido e o que nao passou, sem ter de
+    confiar na palavra do sistema.
+    """
+
+    quote: str = Field(..., description="O trecho entre aspas, como o modelo escreveu")
+    verified: bool = Field(
+        ...,
+        description=(
+            "O trecho existe literalmente em alguma passagem recuperada? "
+            "False significa inventado OU traduzido -- os dois falham igual."
+        ),
+    )
+    source_index: Optional[int] = Field(
+        None, description="Indice [n] da fonte que contem o trecho, quando verificado"
+    )
+
+
 class EvidenceAnswer(BaseModel):
     """A resposta completa da Dra. Aris, no contrato do §14."""
 
@@ -122,6 +145,14 @@ class EvidenceAnswer(BaseModel):
         description="A resposta está sustentada em evidência do corpus?",
     )
     warnings: List[str] = Field(default_factory=list)
+    quote_checks: List[QuoteCheck] = Field(
+        default_factory=list,
+        description=(
+            "Conferencia dos trechos entre aspas (E3-02). Lista vazia significa "
+            "que a resposta nao trouxe citacao literal longa o bastante para "
+            "conferir, nao que a conferencia foi pulada."
+        ),
+    )
 
     @property
     def cited_sources(self) -> List[EvidenceSource]:
@@ -197,6 +228,172 @@ def verify_citations(
         source.cited = source.citation_index in cited
 
     return {"cited": cited, "invalid": invalid, "used": len(cited)}
+
+
+
+# ---------------------------------------------------------------------------
+# E3-02 — validação de citações literais
+# ---------------------------------------------------------------------------
+#
+# O PROBLEMA
+# ----------
+# A Dra. Aris sintetiza em português a partir de passagens em inglês. A regra
+# de idioma do prompt manda NÃO traduzir o que estiver entre aspas: uma citação
+# literal tem de continuar em inglês, exatamente como saiu do artigo.
+#
+# `verify_citations` confere os marcadores [n] — que a fonte existe. Não confere
+# o que está entre aspas. São dois modos de falha diferentes:
+#
+#     [7] quando só há 6 fontes        -> citação fabricada    (verify_citations)
+#     "frase que ninguém escreveu"     -> citação inventada    (aqui)
+#     "frase do artigo, traduzida"     -> citação adulterada   (aqui)
+#
+# Os dois últimos são mais perigosos que o primeiro, porque aspas são a forma
+# mais forte de afirmar fidelidade ao original. Uma tradução entre aspas parece
+# transcrição e não é.
+#
+# COMO A TRADUÇÃO É DETECTADA
+# ---------------------------
+# Não há detecção de idioma. Ela cai fora de graça: uma citação traduzida não
+# existe como substring da passagem em inglês, então falha na comparação exata
+# como qualquer outra invenção. Menos código e nenhum falso positivo vindo de
+# um classificador de idioma errando em texto técnico.
+#
+# O LIMITE DA NORMALIZAÇÃO
+# ------------------------
+# Normalizar FORMA, nunca CONTEÚDO. Aspas curvas, travessões, espaços e caixa
+# mudam na viagem do PDF para o HTML e daí para o modelo, sem que uma palavra
+# mude. Já casamento aproximado, lematização ou tolerância a sinônimo fariam
+# passar exatamente o que esta função existe para pegar.
+
+# Aspas duplas em todas as formas que aparecem no corpus e que um modelo pode
+# emitir. Aspas SIMPLES ficam de fora de propósito: em inglês o apóstrofo de
+# "don't" e do genitivo "cells'" viraria uma falsa abertura de citação, e o
+# ruído afogaria o sinal.
+_OPENING_TO_CLOSING = {'"': '"', '“': '”', '„': '“', '«': '»'}
+
+QUOTE_PATTERN = re.compile(
+    r'“(?P<curly>[^”]{2,400})”'
+    r'|"(?P<straight>[^"]{2,400})"'
+    r'|«(?P<guillemet>[^»]{2,400})»'
+)
+
+# Abaixo disto é terminologia entre aspas ("microgravity", "bone loss"), não
+# transcrição. Marcar esses casos geraria alarme constante sem risco real: uma
+# expressão de três palavras não sustenta afirmação nenhuma sozinha.
+MIN_QUOTE_WORDS = 4
+
+# Reticências que o modelo usa para elidir trecho no meio da citação.
+_ELLIPSIS_PATTERN = re.compile(r'(?:\.\s*){3,}|…')
+
+_DASHES = dict.fromkeys(map(ord, '‐‑‒–—―−'), '-')
+_APOSTROPHES = dict.fromkeys(map(ord, '‘’‛ʼ'), "'")
+_SPACES = dict.fromkeys(map(ord, '     '), ' ')
+
+
+def normalize_for_match(text: str) -> str:
+    """
+    Reduz o texto à forma em que duas grafias do MESMO trecho coincidem.
+
+    Trata apenas o que muda sem alterar uma palavra sequer:
+      - travessões e hífens tipográficos vão todos para `-`;
+      - apóstrofos e aspas curvas vão para os retos;
+      - espaços especiais, quebras de linha e repetições viram um espaço;
+      - caixa é ignorada, porque o modelo capitaliza a primeira letra ao
+        começar um período com a citação.
+
+    NÃO remove pontuação interna, acento de palavra nem plural. A comparação
+    continua exata — o que muda é só a representação.
+    """
+    text = unicodedata.normalize("NFKC", text)
+    text = text.translate(_DASHES).translate(_APOSTROPHES).translate(_SPACES)
+    text = text.replace('“', '"').replace('”', '"')
+    return " ".join(text.split()).casefold()
+
+
+def _quote_segments(quote: str) -> List[str]:
+    """
+    Parte a citação nas reticências de elisão.
+
+    `"A ... B"` é uma citação legítima de duas partes distantes no original.
+    Exigir a string inteira reprovaria um uso correto, então cada segmento é
+    procurado em separado — e em ordem, para que a elisão não possa inverter
+    o sentido juntando trechos fora de sequência.
+    """
+    parts = [p.strip(" ,;:.") for p in _ELLIPSIS_PATTERN.split(quote)]
+    return [p for p in parts if p]
+
+
+def _find_in_passages(quote: str, sources: List["EvidenceSource"]) -> Optional[int]:
+    """Índice da primeira fonte que contém a citação, ou None."""
+    segments = [normalize_for_match(s) for s in _quote_segments(quote)]
+    if not segments or not all(segments):
+        return None
+
+    for source in sources:
+        haystack = normalize_for_match(source.passage)
+        cursor = 0
+        for segment in segments:
+            position = haystack.find(segment, cursor)
+            if position < 0:
+                break
+            cursor = position + len(segment)
+        else:
+            return source.citation_index
+    return None
+
+
+def validate_quotes(
+    answer: str, sources: List["EvidenceSource"]
+) -> Dict[str, Any]:
+    """
+    Confere que cada trecho entre aspas existe literalmente nas passagens.
+
+    Reprova a citação que o modelo inventou e a que ele traduziu — os dois
+    casos falham pelo mesmo teste, porque nenhum dos dois aparece no texto
+    original em inglês.
+
+    Tratamento da falha: as ASPAS são removidas, o texto permanece. A alegação
+    falsa é a de literalidade, não necessariamente o conteúdo; uma paráfrase
+    correta continua útil ao leitor, desde que pare de se apresentar como
+    transcrição. A resposta nunca é bloqueada por isso — quem decide se ela se
+    sustenta é a verificação de citações [n], e recusar duas vezes pelo mesmo
+    material seria punir o usuário por um defeito de formatação do modelo.
+
+    Só examina trechos com MIN_QUOTE_WORDS palavras ou mais; abaixo disso é
+    terminologia entre aspas, não transcrição.
+
+    Returns:
+        {"answer": str, "checks": [QuoteCheck], "verified": int,
+         "unverified": int, "examined": int}
+    """
+    checks: List[QuoteCheck] = []
+
+    def _inspect(match: "re.Match") -> str:
+        raw = next(g for g in match.groups() if g is not None)
+        original = match.group(0)
+
+        if len(raw.split()) < MIN_QUOTE_WORDS:
+            return original  # terminologia, não citação
+
+        source_index = _find_in_passages(raw, sources)
+        verified = source_index is not None
+        checks.append(
+            QuoteCheck(quote=raw.strip(), verified=verified, source_index=source_index)
+        )
+        # Reprovada: cai para texto corrido, sem a alegação de literalidade.
+        return original if verified else raw
+
+    rewritten = QUOTE_PATTERN.sub(_inspect, answer)
+    verified = sum(1 for c in checks if c.verified)
+
+    return {
+        "answer": rewritten,
+        "checks": checks,
+        "verified": verified,
+        "unverified": len(checks) - verified,
+        "examined": len(checks),
+    }
 
 
 def insufficient_evidence_answer(
