@@ -91,3 +91,29 @@ secrets.yaml
 *.sql
 *.dump
 *.bak
+
+# ---------------------------------------------------------------------------
+# F0-1 -- artefatos locais que nao pertencem a um repositorio publico
+# ---------------------------------------------------------------------------
+# Nenhum destes existia no indice quando este bloco foi escrito. Entram como
+# PREVENCAO: sao arquivos que aparecem sozinhos no diretorio do projeto, e o
+# momento em que alguem nota que foram versionados costuma ser depois do push.
+
+# Instrucoes locais para o agente de codigo. E configuracao da maquina de quem
+# desenvolve, nao do projeto -- e pode conter caminho pessoal e contexto que
+# nao interessa a quem clona.
+CLAUDE.md
+
+# Bundles do git, usados como backup local antes de publicar. Carregam o
+# repositorio inteiro dentro do repositorio: dezenas de MB que dobram a cada
+# copia.
+*.bundle
+
+# Rascunhos de descricao de pull request. Sao texto de trabalho que vive no
+# GitHub depois de colado; versiona-los deixa o repositorio com a memoria de
+# PRs ja fechados.
+PR-*.md
+
+# Espaco para anotacoes que nao vao a publico. Existe para que haja um lugar
+# obvio onde colocar isso -- sem ele, a nota acaba na raiz e escapa.
+docs/private/
