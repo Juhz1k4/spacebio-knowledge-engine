@@ -1,3 +1,20 @@
+"""
+Ingestão do corpus a partir da lista de publicações da NASA (Fase 0)
+
+Percorre o CSV de publicações, baixa cada artigo do PMC, extrai o texto do
+HTML e grava em `data/processed_text/`, registrando o resultado em
+`data/metadata.csv`.
+
+Foi este script que produziu o corpus bruto de 594 registros. Ele NÃO é o
+pipeline atual: o texto que o motor usa passa depois pelo `cleaner.py`
+(SPACEBIO-012.5), que remove cabeçalho e bibliografia e descarta erratas e
+publicações de procedência duvidosa.
+
+ATENÇÃO: reexecutar sobrescreve `data/metadata.csv`. A divergência entre
+título declarado e artigo baixado que a issue SPACEBIO-007.1 documenta nasce
+aqui — ver docs/issues/SPACEBIO-007.1-title-divergence.md antes de mexer.
+"""
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup

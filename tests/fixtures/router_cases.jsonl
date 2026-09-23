@@ -1,0 +1,91 @@
+{"q": "quem é você?", "intent": "identity", "note": "forma canônica"}
+{"q": "Quem é você", "intent": "identity", "note": "sem interrogação"}
+{"q": "quem e vc?", "intent": "identity", "note": "sem acento, abreviado"}
+{"q": "QUEM É VOCÊ?", "intent": "identity", "note": "caixa alta não pode virar sigla técnica"}
+{"q": "quem é a Dra. Aris?", "intent": "identity", "note": "pelo nome, com ponto abreviativo"}
+{"q": "qual é o seu nome?", "intent": "identity", "note": null}
+{"q": "o que você é?", "intent": "identity", "note": null}
+{"q": "who are you?", "intent": "identity", "note": "inglês"}
+{"q": "se apresente", "intent": "identity", "note": "imperativo"}
+{"q": "oi, quem é você?", "intent": "identity", "note": "saudação na frente não muda a intenção"}
+{"q": "quem é você, por favor?", "intent": "identity", "note": "cortesia no fim"}
+{"q": "como você funciona?", "intent": "usage", "note": "era PERDIDA antes da E3-03"}
+{"q": "como funciona?", "intent": "usage", "note": "elíptico"}
+{"q": "como funciona isso?", "intent": "usage", "note": null}
+{"q": "como te uso?", "intent": "usage", "note": null}
+{"q": "como eu uso isso?", "intent": "usage", "note": null}
+{"q": "como devo perguntar?", "intent": "usage", "note": null}
+{"q": "ajuda", "intent": "usage", "note": "uma palavra"}
+{"q": "me ajuda", "intent": "usage", "note": null}
+{"q": "me ajude", "intent": "usage", "note": null}
+{"q": "help", "intent": "usage", "note": "inglês, comando"}
+{"q": "socorro", "intent": "usage", "note": null}
+{"q": "o que você faz?", "intent": "usage", "note": null}
+{"q": "o que você pode fazer?", "intent": "usage", "note": null}
+{"q": "what can you do?", "intent": "usage", "note": null}
+{"q": "que perguntas posso fazer?", "intent": "usage", "note": null}
+{"q": "por onde eu começo?", "intent": "usage", "note": null}
+{"q": "me dá um exemplo", "intent": "usage", "note": null}
+{"q": "quais artigos você tem?", "intent": "corpus", "note": "era PERDIDA antes da E3-03"}
+{"q": "quantos artigos?", "intent": "corpus", "note": null}
+{"q": "qual é a sua base de dados?", "intent": "corpus", "note": null}
+{"q": "quais são as suas fontes?", "intent": "corpus", "note": null}
+{"q": "de onde vem suas informações?", "intent": "corpus", "note": null}
+{"q": "o que tem no seu acervo?", "intent": "corpus", "note": null}
+{"q": "quais temas você cobre?", "intent": "corpus", "note": "pedido explícito da E3-03"}
+{"q": "que assuntos você aborda?", "intent": "corpus", "note": null}
+{"q": "sobre o que você responde?", "intent": "corpus", "note": null}
+{"q": "quais são suas limitações?", "intent": "limitations", "note": "era PERDIDA antes da E3-03"}
+{"q": "suas limitações", "intent": "limitations", "note": "sem verbo"}
+{"q": "o que você não sabe?", "intent": "limitations", "note": null}
+{"q": "o que você não pode fazer?", "intent": "limitations", "note": null}
+{"q": "você pode errar?", "intent": "limitations", "note": null}
+{"q": "você alucina?", "intent": "limitations", "note": null}
+{"q": "what are your limitations?", "intent": "limitations", "note": null}
+{"q": "RUNX2", "intent": null, "note": "termo isolado, exigência explícita da E3-03"}
+{"q": "CDKN1A", "intent": null, "note": "gene isolado"}
+{"q": "p21", "intent": null, "note": "identificador curto com dígito"}
+{"q": "OSD-570", "intent": null, "note": "dataset da NASA"}
+{"q": "GLDS-104", "intent": null, "note": "identificador com hífen"}
+{"q": "microgravidade ossos", "intent": null, "note": "termos soltos, exigência explícita"}
+{"q": "radiação celular", "intent": null, "note": "exigência explícita"}
+{"q": "atrofia muscular", "intent": null, "note": "termo composto"}
+{"q": "perda óssea", "intent": null, "note": null}
+{"q": "Arabidopsis", "intent": null, "note": "organismo isolado"}
+{"q": "osteoclastos", "intent": null, "note": "termo em português fora do grafo"}
+{"q": "telômeros", "intent": null, "note": null}
+{"q": "autofagia", "intent": null, "note": null}
+{"q": "osteogênese", "intent": null, "note": null}
+{"q": "apoptose", "intent": null, "note": null}
+{"q": "ISS", "intent": null, "note": "sigla isolada"}
+{"q": "DNA", "intent": null, "note": "sigla isolada"}
+{"q": "me ajuda com RUNX2", "intent": null, "note": "FALHAVA antes: forma operacional + assunto"}
+{"q": "me ajude a entender a atrofia muscular", "intent": null, "note": "FALHAVA antes"}
+{"q": "ajuda sobre Arabidopsis", "intent": null, "note": "FALHAVA antes"}
+{"q": "como funciona a osteogênese?", "intent": null, "note": "FALHAVA antes"}
+{"q": "como funciona a autofagia?", "intent": null, "note": "FALHAVA antes"}
+{"q": "como usar dados de RNAseq?", "intent": null, "note": "FALHAVA antes"}
+{"q": "quais artigos falam de osteoclastos?", "intent": null, "note": "FALHAVA antes"}
+{"q": "o que você não sabe sobre telômeros?", "intent": null, "note": "FALHAVA antes"}
+{"q": "como funciona a resposta imune no espaço?", "intent": null, "note": "forma operacional + assunto"}
+{"q": "o que você sabe sobre apoptose?", "intent": null, "note": "forma operacional + assunto"}
+{"q": "quais temas de radiação você cobre?", "intent": null, "note": "corpus + assunto grudado"}
+{"q": "quais são as limitações do estudo?", "intent": null, "note": "limitações DO ESTUDO, não da Aris"}
+{"q": "quais artigos tratam de plantas?", "intent": null, "note": null}
+{"q": "me dá um exemplo de experimento na ISS", "intent": null, "note": "usage + assunto"}
+{"q": "como te uso para achar genes?", "intent": null, "note": "usage + assunto"}
+{"q": "quem é o autor do estudo sobre ossos?", "intent": null, "note": "quem-é, mas não sobre a Aris"}
+{"q": "como a microgravidade afeta a densidade óssea?", "intent": null, "note": "pergunta científica plena"}
+{"q": "quais genes respondem à radiação espacial?", "intent": null, "note": null}
+{"q": "o que acontece com o sistema imune em voo espacial?", "intent": null, "note": null}
+{"q": "How does spaceflight affect bone density?", "intent": null, "note": "científica em inglês"}
+{"q": "Which genes respond to cosmic radiation?", "intent": null, "note": "científica em inglês"}
+{"q": "efeitos do voo espacial em camundongos", "intent": null, "note": "sem forma interrogativa"}
+{"q": "expressão gênica em microgravidade", "intent": null, "note": null}
+{"q": "Bacillus subtilis no espaço", "intent": null, "note": "organismo do grafo"}
+{"q": "qual a capital de Portugal?", "intent": null, "note": "fora do domínio: RAG recusa, não é operacional"}
+{"q": "me ajuda a fazer um bolo", "intent": null, "note": "fora do domínio, forma operacional com assunto"}
+{"q": "", "intent": null, "note": "vazio"}
+{"q": "   ", "intent": null, "note": "só espaços"}
+{"q": "?", "intent": null, "note": "só pontuação"}
+{"q": "asdfghjkl", "intent": null, "note": "sem sentido: vai ao RAG e recebe recusa"}

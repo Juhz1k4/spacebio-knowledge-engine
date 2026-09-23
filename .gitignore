@@ -1,0 +1,119 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local project artifacts
+*.log
+*.sqlite3
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# Raw downloads are not versioned; processed corpus remains tracked intentionally.
+data/raw_pdfs/
+
+# Saída derivada do cleaner (SPACEBIO-012.5): reproduzível a partir de
+# data/processed_text/ rodando `python cleaner.py`. Não versionar.
+data/clean_text/
+
+# Cache HTTP das respostas do Crossref (E3-06). 14 MB de payload bruto,
+# regeneravel em ~3 min com `python enrich_metadata.py --all`. O dado que o
+# projeto de fato usa -- autores, ano, volume -- vive no grafo, gravado pelo
+# job. Versionar cache de API so incha o repositorio.
+data/crossref_metadata.json
+
+# ---------------------------------------------------------------------------
+# E3-08 -- segredos que o .gitignore anterior nao cobria
+# ---------------------------------------------------------------------------
+# Auditado com `git check-ignore` sobre caminhos reais, e nao por leitura do
+# arquivo: um padrao pode parecer certo e nao casar. Os oito abaixo passavam.
+#
+# Cada linha existe porque a ferramenta correspondente grava o arquivo NO
+# DIRETORIO DO PROJETO por padrao -- e e assim que segredo vaza: nao por
+# descuido, mas porque o arquivo aparece onde ninguem esperava.
+
+# Chaves SSH (ssh-keygen sugere o diretorio atual se o -f for relativo)
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+.ssh/
+
+# Certificados e chaves TLS (*.pem ja coberto acima)
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Credenciais de servico em JSON/YAML
+credentials.json
+credentials.yml
+credentials.yaml
+service-account*.json
+gcp-*.json
+*-service-account.json
+secrets.yml
+secrets.yaml
+
+# Tokens de registro de pacote (npm login grava o token aqui)
+.npmrc
+.yarnrc
+.pypirc
+
+# Dumps e backups, que costumam carregar dados reais
+*.sql
+*.dump
+*.bak
+
+# ---------------------------------------------------------------------------
+# F0-1 -- artefatos locais que nao pertencem a um repositorio publico
+# ---------------------------------------------------------------------------
+# Nenhum destes existia no indice quando este bloco foi escrito. Entram como
+# PREVENCAO: sao arquivos que aparecem sozinhos no diretorio do projeto, e o
+# momento em que alguem nota que foram versionados costuma ser depois do push.
+
+# Instrucoes locais para o agente de codigo. E configuracao da maquina de quem
+# desenvolve, nao do projeto -- e pode conter caminho pessoal e contexto que
+# nao interessa a quem clona.
+CLAUDE.md
+
+# Bundles do git, usados como backup local antes de publicar. Carregam o
+# repositorio inteiro dentro do repositorio: dezenas de MB que dobram a cada
+# copia.
+*.bundle
+
+# Rascunhos de descricao de pull request. Sao texto de trabalho que vive no
+# GitHub depois de colado; versiona-los deixa o repositorio com a memoria de
+# PRs ja fechados.
+PR-*.md
+
+# Espaco para anotacoes que nao vao a publico. Existe para que haja um lugar
+# obvio onde colocar isso -- sem ele, a nota acaba na raiz e escapa.
+docs/private/

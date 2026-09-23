@@ -1,3 +1,13 @@
+"""
+Ingestão pontual de um PDF por DOI (Fase 0) — HISTÓRICO
+
+Baixava um artigo específico e extraía o texto com PyPDF2. Serviu de prova de
+conceito antes do `ingest_from_github.py`, que trouxe o corpus completo.
+
+Estado: só resta 1 PDF em `data/raw_pdfs/`, e ele não alimenta o corpus atual.
+O corpus é 100% HTML do PMC. Ver docs/ROADMAP-FASE-3.md §3.
+"""
+
 import os
 import requests
 import pandas as pd
