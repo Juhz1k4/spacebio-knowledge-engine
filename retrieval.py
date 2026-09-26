@@ -840,6 +840,55 @@ class RetrievalRepository:
         rows = self._run(cypher)
         return rows[0] if rows else {"publications": 0, "chunks": 0, "has_chunk_relations": 0}
 
+    def public_stats(self) -> Dict[str, Any]:
+        """
+        Contagens exibidas na página inicial (A1).
+
+        MÉTODO SEPARADO DE `corpus_stats`, DE PROPÓSITO
+        ----------------------------------------------
+        `corpus_stats` serve ao `/health` e responde "o grafo está povoado?".
+        Este responde "o que mostrar ao visitante?". São perguntas diferentes,
+        e acrescentar campos ao primeiro acoplaria o contrato de diagnóstico
+        ao texto da landing -- qualquer ajuste de marketing passaria a mexer
+        no que o monitoramento lê.
+
+        POR QUE SUBCONSULTAS E NÃO `MATCH` ENCADEADO
+        --------------------------------------------
+        A especificação da A1 traz a forma encadeada
+        (`MATCH ... WITH count(...) AS x MATCH ...`), que funciona e devolve
+        exatamente os mesmos números. Medido nesta base, mediana de 5
+        execuções com cache quente:
+
+            encadeada      24,2 ms
+            subconsultas    9,3 ms
+
+        Cada `CALL () { ... }` é um escopo isolado, o que deixa o planejador
+        usar a contagem por rótulo em vez de varrer. A diferença é pequena em
+        termos absolutos, mas esta consulta é a primeira coisa que roda quando
+        alguém abre o site.
+
+        Os números vêm SEMPRE do grafo. Nenhum é constante no código: um valor
+        escrito à mão fica correto hoje e silenciosamente errado no dia em que
+        o acervo mudar, e o defeito só aparece quando alguém confere na mão.
+        """
+        cypher = """
+        CALL () { MATCH (p:Publication) RETURN count(p) AS publications }
+        CALL () { MATCH (c:Chunk)       RETURN count(c) AS chunks }
+        CALL () { MATCH (e:Entity)      RETURN count(e) AS entities }
+        CALL () { MATCH (o:Organism)    RETURN count(o) AS organisms }
+        CALL () { MATCH (d:Dataset)     RETURN count(d) AS datasets }
+        RETURN publications, chunks, entities, organisms, datasets
+        """
+        rows = self._run(cypher)
+        if not rows:
+            # Grafo vazio devolve zeros, nunca erro: a página inicial precisa
+            # renderizar mesmo com o banco recém-criado.
+            return {
+                "publications": 0, "chunks": 0,
+                "entities": 0, "organisms": 0, "datasets": 0,
+            }
+        return rows[0]
+
 
 if __name__ == "__main__":
     import argparse

@@ -47,9 +47,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Tuple
 import logging
 import os
+import time
 
 from config import MissingCredentialError, settings
 from evidence import EvidenceAnswer
@@ -286,6 +288,88 @@ class ChatResponse(BaseModel):
 @app.get("/")
 def read_root():
     return {"message": "Bem-vindo ao motor de conhecimento de Biologia Espacial!"}
+
+
+# --- A1: estatisticas publicas do acervo ---
+
+# 10 minutos, como a issue pede. O numero nao e arbitrario: estas contagens so
+# mudam depois de uma ingestao, que e um job manual de minutos. Servir por
+# ate 10 min um valor que muda algumas vezes por mes e trocar precisao
+# irrelevante por uma consulta a menos em cada visita a pagina inicial.
+STATS_CACHE_SECONDS = int(os.getenv("STATS_CACHE_SECONDS", "600"))
+
+# Cache em MEMORIA do processo, com a mesma limitacao ja documentada para o
+# limitador de taxa: com varios workers, cada um tem o seu. Para uma pagina
+# inicial isso e irrelevante -- o pior caso e um worker servir numeros 10 min
+# mais velhos que outro, e os numeros sao os mesmos.
+_stats_cache: Optional[Tuple[float, Dict[str, Any]]] = None
+
+
+class PublicStats(BaseModel):
+    """
+    Contagens exibidas na pagina inicial (A1).
+
+    Existe como modelo, e nao como dict solto, para que o frontend tenha um
+    contrato a espelhar -- e para que acrescentar um campo aqui seja uma
+    decisao visivel, nao um efeito colateral de mexer no Cypher.
+    """
+
+    publications: int = Field(..., description="Publicacoes do conjunto da NASA no acervo")
+    chunks: int = Field(..., description="Trechos auditaveis, cada um citavel individualmente")
+    entities: int = Field(..., description="Entidades biologicas vinculadas pela ontologia")
+    organisms: int
+    datasets: int = Field(..., description="Conjuntos de dados do OSDR mencionados")
+    generated_at: str = Field(
+        ...,
+        description=(
+            "Quando a contagem foi feita, em UTC. Exposto para que o cliente "
+            "possa dizer ao usuario a idade do numero em vez de fingir que e "
+            "instantaneo."
+        ),
+    )
+    cached: bool = Field(
+        ...,
+        description="A resposta veio do cache? Honestidade sobre a origem, como no cache de demonstracao.",
+    )
+
+
+@app.get("/api/v1/stats", response_model=PublicStats)
+def public_stats(repository: RetrievalRepository = Depends(get_retrieval)) -> PublicStats:
+    """
+    Contagens do acervo para a pagina inicial.
+
+    TODO NUMERO EXIBIDO AO USUARIO PASSA POR AQUI.
+
+    A pagina inicial antes trazia duas contagens escritas a mao, sem origem
+    nenhuma: uma de pesquisadores cadastrados e outra de artigos publicados.
+    Nenhuma das duas tinha de onde sair -- nao ha cadastro de pesquisador, e
+    nada foi publicado atraves daquela interface. A F0-2 removeu as duas.
+
+    A correcao NAO foi troca-las pelos valores verdadeiros igualmente
+    digitados aqui. Isso criaria o mesmo defeito numa forma mais dificil de
+    perceber: correto hoje, silenciosamente errado quando o acervo mudar, e
+    ninguem revisa porque parece certo. Este endpoint conta no grafo.
+
+    Os valores literais removidos ficam FORA deste comentario de proposito. A
+    F0-2 deixou uma verificacao por grep na interface, e reproduzi-los aqui
+    faria o proprio registro historico disparar o alarme depois -- foi o
+    mesmo cuidado tomado nos comentarios do Hero.tsx e do index.html.
+    """
+    global _stats_cache
+
+    agora = time.monotonic()
+    if _stats_cache is not None:
+        gravado_em, payload = _stats_cache
+        if agora - gravado_em < STATS_CACHE_SECONDS:
+            return PublicStats(**{**payload, "cached": True})
+
+    dados = repository.public_stats()
+    payload = {
+        **dados,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    _stats_cache = (agora, payload)
+    return PublicStats(**{**payload, "cached": False})
 
 
 @app.get("/api/v1/health")
