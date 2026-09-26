@@ -340,11 +340,20 @@ def public_stats(repository: RetrievalRepository = Depends(get_retrieval)) -> Pu
 
     TODO NUMERO EXIBIDO AO USUARIO PASSA POR AQUI.
 
-    A pagina inicial antes trazia "500+ pesquisadores" e "1.2K artigos"
-    escritos a mao, sem origem. A correcao nao foi trocar por 493 e 45.947
-    igualmente escritos a mao -- isso criaria o mesmo defeito numa forma mais
-    dificil de perceber, correto hoje e silenciosamente errado quando o acervo
-    mudasse. Este endpoint conta no grafo.
+    A pagina inicial antes trazia duas contagens escritas a mao, sem origem
+    nenhuma: uma de pesquisadores cadastrados e outra de artigos publicados.
+    Nenhuma das duas tinha de onde sair -- nao ha cadastro de pesquisador, e
+    nada foi publicado atraves daquela interface. A F0-2 removeu as duas.
+
+    A correcao NAO foi troca-las pelos valores verdadeiros igualmente
+    digitados aqui. Isso criaria o mesmo defeito numa forma mais dificil de
+    perceber: correto hoje, silenciosamente errado quando o acervo mudar, e
+    ninguem revisa porque parece certo. Este endpoint conta no grafo.
+
+    Os valores literais removidos ficam FORA deste comentario de proposito. A
+    F0-2 deixou uma verificacao por grep na interface, e reproduzi-los aqui
+    faria o proprio registro historico disparar o alarme depois -- foi o
+    mesmo cuidado tomado nos comentarios do Hero.tsx e do index.html.
     """
     global _stats_cache
 
